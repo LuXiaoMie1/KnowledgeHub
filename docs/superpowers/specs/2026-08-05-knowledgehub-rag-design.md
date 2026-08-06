@@ -1,19 +1,21 @@
-# KnowledgeHub — 企業知識庫 RAG 問答系統 設計文件
+# KnowledgeHub — 企業 AI 助理 設計文件
 
-- 日期：2026-08-05
-- 狀態：已由使用者核准設計方向，待核准本文件
-- 定位：個人 side project，放個人 GitHub（面試作品）。**repo 未來可能公開，任何金鑰、連線字串永不進版控。**
+- 日期：2026-08-05；2026-08-06 修訂（定位升級為企業 AI 助理、OpenAI 換 Gemini、新增 Markdown 匯入與 Phase B roadmap）
+- 狀態：設計方向已核准，本文件待使用者確認
+- 定位：可擴充工具的 AI Agent 平台——第一個能力是企業知識庫問答（Phase A，本文件主體），第二個能力是 EIP 待審助理（Phase B，見 §12）。目標是公司內部實際使用，同時放個人 GitHub 作為作品集。**repo 會公開，任何金鑰、連線字串、公司內部網址與頁面結構永不進版控。**
 
 ## 1. 目標
 
-一個可實際跑起來的企業知識庫問答系統：使用者上傳 PDF 文件 → 背景解析切片並向量化 → 依部門權限檢索 → AI Agent 以串流回答並附參考來源，且能自行決定呼叫「查知識庫」或「寄信通知」工具。
+一個可實際跑起來的企業知識庫問答系統：使用者上傳 PDF 或 Markdown 文件 → 背景解析切片並向量化 → 依部門權限檢索 → AI Agent 以串流回答並附參考來源，且能自行決定呼叫「查知識庫」或「寄信通知」工具。
 
-面試要能講的故事：.NET 10 分層架構、SQL Server 原生向量搜尋、Semantic Kernel function calling、Hangfire 非同步管線、SSE 串流、Vue 3 前端。
+Markdown 匯入的直接動機：團隊已有一套 Obsidian 維運知識庫（POS/APP SOP、事件案例，分類與 frontmatter 完整），是本系統最好的第一批真實語料。
+
+面試要能講的故事：.NET 10 分層架構、SQL Server 原生向量搜尋、Semantic Kernel function calling（Gemini，provider 可切換）、Hangfire 非同步管線、SSE 串流、Vue 3 前端，且是解決自己公司真實痛點的系統。
 
 ### 非目標（YAGNI）
 
 - 不做多租戶、不做使用者管理後台（使用者為種子資料）
-- 不做文件版本控制、不做 PDF 以外的格式（介面留擴充點即可）
+- 不做文件版本控制；格式只支援 PDF 與 Markdown，其他格式留擴充介面即可
 - 不做向量索引調校（資料量小，exact KNN 足夠；README 註明 DiskANN 為擴充方向)
 - 不做真實寄信（EmailPlugin 寫 outbox 表）
 
@@ -23,7 +25,7 @@
 |---|---|
 | 後端 | .NET 10（LTS）、ASP.NET Core Web API |
 | ORM/DB | EF Core 10 + Azure SQL Database 免費層（原生 `VECTOR(1536)`） |
-| AI | OpenAI：`gpt-4o-mini`（chat）、`text-embedding-3-small`（1536 維） |
+| AI | Gemini：`gemini-2.5-flash`（chat）、`gemini-embedding-001`（指定 1536 維）。provider 以設定切換：開發用 AI Studio 免費層 key（**只餵假資料**，免費層資料會被 Google 用於訓練）；接真實公司文件時切 Vertex AI（Cloud 資料治理，不用於訓練，可吃 GCP 試用抵免額） |
 | Agent | Semantic Kernel（auto function calling） |
 | 背景工作 | Hangfire + Hangfire.SqlServer（同一顆 Azure SQL） |
 | PDF 解析 | PdfPig |
@@ -32,14 +34,16 @@
 | 機密 | 開發用 `dotnet user-secrets`；CI 不需要金鑰 |
 | 測試/CI | xUnit；GitHub Actions（build + test） |
 
+Gemini 接法開工時定案二選一：Semantic Kernel 的 Google 連接器（長期掛 preview，開工前查現況），或 Gemini 的 OpenAI 相容端點＋OpenAI 連接器。兩者皆支援 function calling；程式碼已用 Core 的 `IChatService`／`IEmbeddingService` 介面隔離，切換不影響其他層。
+
 ## 3. 方案結構
 
 ```
 KnowledgeHub/
 ├── backend/
 │   ├── KnowledgeHub.Api/            # Controllers、SSE、DI 組裝、JWT 設定、Hangfire server
-│   ├── KnowledgeHub.Core/           # 實體、介面、純邏輯（切片器）— 不依賴 EF/OpenAI
-│   ├── KnowledgeHub.Infrastructure/ # EF Core DbContext、Repository、OpenAI/SK 實作、Hangfire job
+│   ├── KnowledgeHub.Core/           # 實體、介面、純邏輯（切片器）— 不依賴 EF 與任何 AI SDK
+│   ├── KnowledgeHub.Infrastructure/ # EF Core DbContext、Repository、Gemini/SK 實作、Hangfire job
 │   └── KnowledgeHub.Tests/          # 單元測試
 ├── frontend/                        # Vue 3 + Vite + Tailwind
 ├── docs/
@@ -99,7 +103,7 @@ interface IChunkRepository {
 
 ### SK 組裝
 
-- `Kernel` 註冊 OpenAI chat + 兩個 plugin，`FunctionChoiceBehavior.Auto()` 讓模型自行決定要不要調工具。
+- `Kernel` 註冊 Gemini chat + 兩個 plugin，`FunctionChoiceBehavior.Auto()` 讓模型自行決定要不要調工具。
 - `RetrievalPlugin.SearchKnowledgeBase(query)`：把 query 轉 embedding → `SearchSimilarChunksAsync`（部門取自當前請求的 claim）→ 回傳段落文字給模型，**同時**把命中結果掛到 per-request 的 `RetrievalContext`（scoped service），供 API 層取用。
 - `EmailPlugin.SendEmail(to, subject, body)`：寫入 `OutboxEmail` 表，回傳「已寄出」訊息。
 
@@ -120,14 +124,14 @@ event: done     data: {}
 ## 7. 文件上傳與背景解析（階段三）
 
 ```
-POST /api/documents (multipart) ──► 驗證(PDF、≤20MB) ──► 存檔 uploads/{docId}.pdf
+POST /api/documents (multipart) ──► 驗證(PDF/MD、≤20MB) ──► 存檔 uploads/{docId}.{副檔名}
         ──► 建 CompanyDocument(Pending) ──► Hangfire Enqueue(docId) ──► 202 + docId
 ```
 
 背景 job `DocumentProcessingJob.ProcessAsync(Guid docId)`：
 
 1. 標記 Processing
-2. PdfPig 逐頁抽文字，串成全文
+2. 依副檔名抽全文：PDF 用 PdfPig 逐頁抽文字；Markdown 直接讀入，略過開頭的 YAML frontmatter（frontmatter 之後可擴充為檢索 metadata，本階段不做）
 3. `TextChunker.Split(text, chunkSize: 500, overlapRatio: 0.1)` — **Core 內純函式**，字元數計算（中文適用），10% 重疊
 4. 批次呼叫 embedding API（每批 ≤ 64 段），組 `DocumentChunk` 整批寫入
 5. 標記 Completed + 回填 ChunkCount；任何一步失敗 → 標記 Failed + 存 ErrorMessage，不重試（Hangfire 自動重試設為關閉，失敗狀態對使用者可見）
@@ -151,13 +155,13 @@ POST /api/documents (multipart) ──► 驗證(PDF、≤20MB) ──► 存檔
 | `TextChunker` | 純函式單元測試：長度、重疊、中文、邊界（空字串、短於 500） |
 | `SearchSimilarChunksAsync` | 部門過濾與 TOP K 的查詢邏輯（sqlite 不支援 VECTOR，故此層用整合測試標記，CI 跳過、本機對 Azure SQL 跑；README 註明） |
 | Chat 服務 | mock `IChatCompletionService`，驗證 sources 事件的觸發邏輯 |
-| 上傳 API | 驗證拒絕非 PDF、超額檔案回 400 |
+| 上傳 API | 驗證拒絕非 PDF/MD、超額檔案回 400 |
 
 CI（GitHub Actions）：`dotnet build` + `dotnet test`（排除整合測試）+ `npm run build`。不需任何金鑰。
 
 ## 10. 環境與機密
 
-- 連線字串、OpenAI key、JWT signing key：開發放 `dotnet user-secrets`；`appsettings.json` 只留空位與註解。
+- 連線字串、Gemini API key（或 Vertex AI 憑證）、JWT signing key：開發放 `dotnet user-secrets`；`appsettings.json` 只留空位與註解。
 - `.gitignore`：`node_modules/`、`bin/`、`obj/`、`uploads/`、`.env`。
 - Azure SQL 免費層注意事項（寫進 README）：serverless 自動暫停，閒置後首個請求冷啟動 30–60 秒，demo 前先打一次 `GET /api/health`；每月 100k vCore-秒對開發用量綽綽有餘。
 
@@ -168,7 +172,15 @@ CI（GitHub Actions）：`dotnet build` + `dotnet test`（排除整合測試）+
 | 0 | 方案骨架、gitignore、CI、README 雛形 | CI 綠 |
 | 1 | 實體、DbContext、migration、Repository（向量搜尋）、JWT auth | 對 Azure SQL 實跑 migration；手插測試向量查得回正確 TOP 5 且部門過濾生效 |
 | 2 | SK Agent、兩個 plugin、SSE chat 端點 | curl 實測：問知識庫問題有 sources 事件；請它寄信 outbox 表有紀錄 |
-| 3 | 上傳 API + Hangfire job + 切片器 | 上傳真實 PDF → 狀態走完 → chunks 入庫 → 立即可問答 |
+| 3 | 上傳 API + Hangfire job + 切片器 | 上傳真實 PDF 與 Markdown（拿團隊 Obsidian vault 的假資料版測）→ 狀態走完 → chunks 入庫 → 立即可問答 |
 | 4 | Vue 前端整合 | 瀏覽器完整走一遍：登入→上傳→看進度→問答→看來源卡片 |
 
-前置作業（使用者自行操作，開工前完成）：建 Azure SQL Database 免費層、取得連線字串；準備 OpenAI API key。
+前置作業（使用者自行操作，開工前完成）：建 Azure SQL Database 免費層、取得連線字串；到 Google AI Studio 申請 Gemini API key（免費層，開發用）。
+
+## 12. Roadmap — Phase B：EIP 待審助理
+
+Phase A（上表階段 0–4）完成後，以新 plugin 形式加入 EIP 待審助理：自動讀取 EIP 待審文件 → AI 摘要整理 → 使用者確認後代為簽核。實作前另寫獨立設計文件；以下三條原則現在先定死，屆時不重議：
+
+1. **人工確認閘門**：AI 只做摘要與建議；每一件簽核都需使用者逐件明確確認才執行。自動化過程遇到任何非預期畫面立即中止並回報，絕不猜測操作。
+2. **公私分離**：公司 EIP 只有網頁介面，需走瀏覽器自動化（Playwright）。公開 repo 只放 plugin 介面與假資料 demo 實作；真正的 EIP connector（內部網址、頁面選擇器、登入流程）放私有 repo，永不進公開版控。
+3. **資料安全**：EIP 公文可能含人事／財務資料，只允許送 Vertex AI（付費層、不用於訓練），禁用 AI Studio 免費層。
