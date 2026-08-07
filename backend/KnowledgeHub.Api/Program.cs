@@ -1,9 +1,12 @@
 using System.Text;
+using Hangfire;
 using KnowledgeHub.Api.Auth;
 using KnowledgeHub.Core;
 using KnowledgeHub.Core.Interfaces;
 using KnowledgeHub.Infrastructure;
 using KnowledgeHub.Infrastructure.Ai;
+using KnowledgeHub.Infrastructure.Extraction;
+using KnowledgeHub.Infrastructure.Jobs;
 using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -43,8 +46,13 @@ builder.Services.AddScoped<IOutboxEmailRepository, OutboxEmailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddSingleton(new UploadOptions(
     builder.Configuration["Upload:Root"] ?? "uploads"));
-// Hangfire 實作在 Task 11，先用 no-op 佔位讓 DocumentsController 可解析。
-builder.Services.AddSingleton<IDocumentJobQueue, NoOpDocumentJobQueue>();
+builder.Services.AddHangfire(c => c.UseSqlServerStorage(
+    builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddHangfireServer();
+builder.Services.AddScoped<IDocumentJobQueue, HangfireDocumentJobQueue>();
+builder.Services.AddScoped<DocumentProcessingJob>();
+builder.Services.AddScoped<IDocumentTextExtractor, PdfTextExtractor>();
+builder.Services.AddScoped<IDocumentTextExtractor, MarkdownTextExtractor>();
 builder.Services.AddScoped<RetrievalContext>();
 builder.Services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>(c =>
         c.BaseAddress = new Uri("https://generativelanguage.googleapis.com/"))
@@ -94,9 +102,3 @@ app.MapControllers();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
-
-// Hangfire 實作在 Task 11；先佔位避免 DocumentsController 的 DI 解析失敗。
-public class NoOpDocumentJobQueue : IDocumentJobQueue
-{
-    public void Enqueue(Guid documentId) { }
-}
