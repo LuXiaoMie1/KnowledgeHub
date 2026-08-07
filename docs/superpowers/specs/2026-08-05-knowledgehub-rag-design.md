@@ -132,7 +132,7 @@ POST /api/documents (multipart) ──► 驗證(PDF/MD、≤20MB) ──► 存
 
 1. 標記 Processing
 2. 依副檔名抽全文：PDF 用 PdfPig 逐頁抽文字；Markdown 直接讀入，略過開頭的 YAML frontmatter（frontmatter 之後可擴充為檢索 metadata，本階段不做）
-3. `TextChunker.Split(text, chunkSize: 500, overlapRatio: 0.1)` — **Core 內純函式**，字元數計算（中文適用），10% 重疊
+3. 切片（**Core 內純函式**，字元數計算、中文適用）：Markdown 走 `MarkdownChunker.Split` — 依標題分段、每片前綴標題路徑（如「POS 維運 > 重開機流程」），超長段落內部再以 500 字元／10% 重疊細切，無標題時退回固定切片；PDF 走 `TextChunker.Split(text, chunkSize: 500, overlapRatio: 0.1)` 固定切片
 4. 批次呼叫 embedding API（每批 ≤ 64 段），組 `DocumentChunk` 整批寫入
 5. 標記 Completed + 回填 ChunkCount；任何一步失敗 → 標記 Failed + 存 ErrorMessage，不重試（Hangfire 自動重試設為關閉，失敗狀態對使用者可見）
 6. 全文為空（掃描檔）→ Failed，訊息注明「無可抽取文字」
@@ -153,6 +153,7 @@ POST /api/documents (multipart) ──► 驗證(PDF/MD、≤20MB) ──► 存
 | 對象 | 測法 |
 |---|---|
 | `TextChunker` | 純函式單元測試：長度、重疊、中文、邊界（空字串、短於 500） |
+| `MarkdownChunker` | 純函式單元測試：依標題分段、標題路徑前綴、超長段落細切、無標題退回固定切片 |
 | `SearchSimilarChunksAsync` | 部門過濾與 TOP K 的查詢邏輯（sqlite 不支援 VECTOR，故此層用整合測試標記，CI 跳過、本機對 Azure SQL 跑；README 註明） |
 | Chat 服務 | mock `IChatCompletionService`，驗證 sources 事件的觸發邏輯 |
 | 上傳 API | 驗證拒絕非 PDF/MD、超額檔案回 400 |
@@ -184,3 +185,13 @@ Phase A（上表階段 0–4）完成後，以新 plugin 形式加入 EIP 待審
 1. **人工確認閘門**：AI 只做摘要與建議；每一件簽核都需使用者逐件明確確認才執行。自動化過程遇到任何非預期畫面立即中止並回報，絕不猜測操作。
 2. **公私分離**：公司 EIP 只有網頁介面，需走瀏覽器自動化（Playwright）。公開 repo 只放 plugin 介面與假資料 demo 實作；真正的 EIP connector（內部網址、頁面選擇器、登入流程）放私有 repo，永不進公開版控。
 3. **資料安全**：EIP 公文可能含人事／財務資料，只允許送 Vertex AI（付費層、不用於訓練），禁用 AI Studio 免費層。
+
+## 13. 檢索品質 Backlog（2026-08-07 討論定案）
+
+定位確認：本專案走「.NET 生態的 AI 工程師」路線，不為對齊主流關鍵字改寫 Python；主流 Python 棧（LlamaIndex／LangChain + pgvector）之後以小型對照實驗 repo 練習（同一批語料重做檢索管線、跑評估集比較兩版），不重寫本系統。
+
+Phase A 已內建：Markdown 標題感知切片（§7 步驟 3——第一批語料是 Obsidian vault，此改動效益最大）。以下為 Phase A 之後的演進方向（寫進 README 的擴充方向，Phase A 不做）：
+
+1. **Hybrid search**：SQL Server 全文檢索（BM25）＋向量兩路召回、RRF 合併——維運 SOP 充滿錯誤代碼、品名等精確詞，純向量檢索對這類查詢會漏
+2. **Reranker**：召回 top 20–50 後以 cross-encoder 重排取 top 5
+3. **評估集**：golden questions＋自動化指標（如 Ragas 類），讓 chunk 大小、top-K 等調整有依據，不憑感覺

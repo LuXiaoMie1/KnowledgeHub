@@ -13,7 +13,7 @@
 - 依賴方向：`Api → Infrastructure → Core`；Core 只准引用 `Microsoft.Data.SqlClient`（為了 `SqlVector<float>` 型別），不得引用 EF 或任何 AI SDK。
 - Gemini chat：OpenAI 相容端點 `https://generativelanguage.googleapis.com/v1beta/openai/`，模型 `gemini-2.5-flash`。
 - Gemini embedding：原生 REST `models/gemini-embedding-001:batchEmbedContents`，`outputDimensionality: 1536`，回傳向量**必須手動 L2 正規化**（官方要求：非 3072 維不自動正規化）。
-- 切片：500 字元、10% 重疊；檢索 TOP 5、cosine 距離；部門過濾前置且只查 `Completed` 文件。
+- 切片：Markdown 依標題分段＋標題路徑前綴（超長段落內部 500 字元、10% 重疊細切；無標題退回固定切片）；PDF 固定 500 字元、10% 重疊。檢索 TOP 5、cosine 距離；部門過濾前置且只查 `Completed` 文件。
 - 上傳限制：只收 `.pdf` / `.md`，≤ 20MB；embedding 批次 ≤ 64 段/次 HTTP。
 - SSE 事件名固定：`token`、`sources`、`done`、`error`。
 - 機密（連線字串、`Gemini:ApiKey`、`Jwt:SigningKey`）一律 `dotnet user-secrets`；demo 使用者密碼是唯一例外，直接放 `appsettings.json`。**開發期只餵假資料（AI Studio 免費層會被拿去訓練）。**
@@ -64,7 +64,7 @@ uploads/
 
 - [ ] **Step 3: 寫 README 雛形（repo 根目錄 `README.md`）**
 
-內容至少含：一句話系統簡介、技術棧清單、`docs/` 指向設計文件、「Azure SQL 免費層 serverless 閒置會自動暫停，首個請求冷啟動 30–60 秒，demo 前先打 `GET /api/health`」注意事項、user-secrets 設定指令範例（key 名：`ConnectionStrings:Default`、`Gemini:ApiKey`、`Jwt:SigningKey`）。
+內容至少含：一句話系統簡介、技術棧清單、`docs/` 指向設計文件、「Azure SQL 免費層 serverless 閒置會自動暫停，首個請求冷啟動 30–60 秒，demo 前先打 `GET /api/health`」注意事項、user-secrets 設定指令範例（key 名：`ConnectionStrings:Default`、`Gemini:ApiKey`、`Jwt:SigningKey`）、「擴充方向」一節（照設計文件 §13：hybrid search（BM25＋RRF）、reranker、評估集；另註明向量索引 DiskANN）。
 
 - [ ] **Step 4: 寫 CI（`.github/workflows/ci.yml`）**
 
@@ -224,14 +224,16 @@ git add -A; git commit -m "feat: Core 實體與介面"
 
 ---
 
-### Task 3: TextChunker 切片器（TDD）
+### Task 3: TextChunker 與 MarkdownChunker 切片器（TDD）
 
 **Files:**
-- Create: `backend/KnowledgeHub.Core/TextChunker.cs`
-- Test: `backend/KnowledgeHub.Tests/TextChunkerTests.cs`
+- Create: `backend/KnowledgeHub.Core/TextChunker.cs`、`backend/KnowledgeHub.Core/MarkdownChunker.cs`
+- Test: `backend/KnowledgeHub.Tests/TextChunkerTests.cs`、`backend/KnowledgeHub.Tests/MarkdownChunkerTests.cs`
 
 **Interfaces:**
-- Produces: `public static IReadOnlyList<string> TextChunker.Split(string text, int chunkSize = 500, double overlapRatio = 0.1)`（namespace `KnowledgeHub.Core`）。Task 11 的背景 job 依賴它。
+- Produces: `public static IReadOnlyList<string> TextChunker.Split(string text, int chunkSize = 500, double overlapRatio = 0.1)`（namespace `KnowledgeHub.Core`）。
+- Produces: `public static IReadOnlyList<string> MarkdownChunker.Split(string text, int chunkSize = 500, double overlapRatio = 0.1)`（namespace `KnowledgeHub.Core`）——依 Markdown 標題分段、每片前綴標題路徑 `【A > B】\n`，段落超長時內部用 `TextChunker.Split` 細切（每片都保留前綴，故片長可能略超 chunkSize＋前綴長度）；全文無標題時行為與 `TextChunker.Split` 完全一致。
+- Task 11 的背景 job 依副檔名路由：`.md` → `MarkdownChunker`、其他 → `TextChunker`。
 
 - [ ] **Step 1: 寫失敗測試**
 
@@ -330,10 +332,137 @@ public static class TextChunker
 Run: `dotnet test backend/KnowledgeHub.Tests --filter TextChunkerTests`
 Expected: PASS ×7。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 寫 MarkdownChunker 失敗測試**
+
+```csharp
+using KnowledgeHub.Core;
+
+public class MarkdownChunkerTests
+{
+    [Fact]
+    public void 空字串回空清單()
+        => Assert.Empty(MarkdownChunker.Split(""));
+
+    [Fact]
+    public void 無標題退回固定切片()
+    {
+        var text = new string('字', 1200);
+        Assert.Equal(TextChunker.Split(text), MarkdownChunker.Split(text));
+    }
+
+    [Fact]
+    public void 依標題分段_各片帶標題路徑前綴()
+    {
+        var md = "# 系統\n總覽說明\n## 重開機流程\n步驟一步驟二\n## 錯誤代碼\nE01 代表斷線";
+        var chunks = MarkdownChunker.Split(md);
+        Assert.Equal(3, chunks.Count);
+        Assert.StartsWith("【系統】\n", chunks[0]);
+        Assert.Contains("總覽說明", chunks[0]);
+        Assert.StartsWith("【系統 > 重開機流程】\n", chunks[1]);
+        Assert.Contains("步驟一步驟二", chunks[1]);
+        Assert.StartsWith("【系統 > 錯誤代碼】\n", chunks[2]);
+        Assert.Contains("E01 代表斷線", chunks[2]);
+    }
+
+    [Fact]
+    public void 低階標題出現時_路徑收斂到該階()
+    {
+        var md = "# A\n## B\n內容一\n# C\n內容二";
+        var chunks = MarkdownChunker.Split(md);
+        Assert.Equal(2, chunks.Count);
+        Assert.StartsWith("【A > B】\n", chunks[0]);
+        Assert.StartsWith("【C】\n", chunks[1]);
+    }
+
+    [Fact]
+    public void 標題下無內容_不產生chunk()
+    {
+        var md = "# 只有標題\n## 也只有標題\n有內容";
+        var chunks = MarkdownChunker.Split(md);
+        Assert.Single(chunks);
+        Assert.Contains("有內容", chunks[0]);
+    }
+
+    [Fact]
+    public void 超長段落_細切且每片都帶前綴()
+    {
+        var md = "# 長章節\n" + new string('字', 1200);
+        var chunks = MarkdownChunker.Split(md, chunkSize: 500, overlapRatio: 0.1);
+        Assert.Equal(3, chunks.Count);
+        Assert.All(chunks, c => Assert.StartsWith("【長章節】\n", c));
+    }
+}
+```
+
+- [ ] **Step 6: 跑測試確認失敗**
+
+Run: `dotnet test backend/KnowledgeHub.Tests --filter MarkdownChunkerTests`
+Expected: FAIL（`MarkdownChunker` 不存在，編譯錯誤即算失敗確認）。
+
+- [ ] **Step 7: 最小實作**
+
+```csharp
+namespace KnowledgeHub.Core;
+
+/// <summary>Markdown 標題感知切片：依標題分段、每片前綴標題路徑；全文無標題時退回 TextChunker 固定切片。</summary>
+public static class MarkdownChunker
+{
+    public static IReadOnlyList<string> Split(string text, int chunkSize = 500, double overlapRatio = 0.1)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) return [];
+
+        var lines = text.Split('\n');
+        if (!lines.Any(IsHeading)) return TextChunker.Split(text, chunkSize, overlapRatio);
+
+        var chunks = new List<string>();
+        var path = new List<(int Level, string Title)>();
+        var body = new List<string>();
+
+        void Flush()
+        {
+            var content = string.Join("\n", body).Trim();
+            body.Clear();
+            if (content.Length == 0) return;
+            var prefix = path.Count == 0 ? "" : $"【{string.Join(" > ", path.Select(p => p.Title))}】\n";
+            foreach (var piece in TextChunker.Split(content, chunkSize, overlapRatio))
+                chunks.Add(prefix + piece);
+        }
+
+        foreach (var line in lines)
+        {
+            if (IsHeading(line))
+            {
+                Flush();
+                var trimmed = line.TrimStart();
+                var level = trimmed.TakeWhile(c => c == '#').Count();
+                path.RemoveAll(p => p.Level >= level);
+                path.Add((level, trimmed[level..].Trim()));
+            }
+            else body.Add(line);
+        }
+        Flush();
+        return chunks;
+    }
+
+    private static bool IsHeading(string line)
+    {
+        var t = line.TrimStart();
+        var hashes = t.TakeWhile(c => c == '#').Count();
+        return hashes is >= 1 and <= 6 && t.Length > hashes && t[hashes] == ' ';
+    }
+}
+```
+
+- [ ] **Step 8: 跑測試確認全綠**
+
+Run: `dotnet test backend/KnowledgeHub.Tests --filter "TextChunkerTests|MarkdownChunkerTests"`
+Expected: PASS ×13（TextChunker 7＋MarkdownChunker 6，兩者都跑，確認未互相影響）。
+
+- [ ] **Step 9: Commit**
 
 ```powershell
-git add -A; git commit -m "feat: TextChunker 切片器（500 字/10% 重疊）"
+git add -A; git commit -m "feat: TextChunker 固定切片與 MarkdownChunker 標題感知切片"
 ```
 
 ---
@@ -1752,7 +1881,7 @@ git add -A; git commit -m "feat: 文件上傳/清單/刪除 API（部門隔離�
 - Test: `backend/KnowledgeHub.Tests/MarkdownTextExtractorTests.cs`、`DocumentProcessingJobTests.cs`
 
 **Interfaces:**
-- Consumes: `IDocumentTextExtractor`、`IDocumentRepository`、`IEmbeddingService`、`TextChunker`（Task 2/3/7/10）。
+- Consumes: `IDocumentTextExtractor`、`IDocumentRepository`、`IEmbeddingService`、`TextChunker`／`MarkdownChunker`（Task 2/3/7/10；`.md` 走 MarkdownChunker、其他走 TextChunker）。
 - Produces: `DocumentProcessingJob.ProcessAsync(Guid documentId)`（Hangfire 進入點，`[AutomaticRetry(Attempts = 0)]`）；`HangfireDocumentJobQueue : IDocumentJobQueue`。
 
 - [ ] **Step 1: 寫失敗測試**
@@ -1858,6 +1987,17 @@ public class DocumentProcessingJobTests
         Assert.Equal(DocumentStatus.Completed, docs.StatusLog[^1].Status);
         Assert.Equal(3, docs.SavedChunks!.Count);
         Assert.Equal([0, 1, 2], docs.SavedChunks.Select(c => c.SequenceNumber));
+        Directory.Delete(root, recursive: true);
+    }
+
+    [Fact]
+    public async Task Markdown帶標題_chunk內容帶標題路徑前綴()
+    {
+        var (job, docs, root) = Build("# 重開機流程\n步驟一");
+
+        await job.ProcessAsync(docs.Doc!.Id);
+
+        Assert.StartsWith("【重開機流程】\n", docs.SavedChunks!.Single().Content);
         Directory.Delete(root, recursive: true);
     }
 
@@ -1981,7 +2121,7 @@ public class DocumentProcessingJob(
                 ?? throw new InvalidOperationException($"不支援的副檔名 {ext}");
             var text = extractor.ExtractText(Path.Combine(upload.Root, $"{doc.Id}{ext}"));
 
-            var pieces = TextChunker.Split(text);
+            var pieces = ext == ".md" ? MarkdownChunker.Split(text) : TextChunker.Split(text);
             if (pieces.Count == 0)
             {
                 await docs.UpdateStatusAsync(documentId, DocumentStatus.Failed, "無可抽取文字（可能是掃描檔）");
@@ -2034,7 +2174,7 @@ builder.Services.AddScoped<IDocumentTextExtractor, MarkdownTextExtractor>();
 - [ ] **Step 4: 跑測試確認全綠**
 
 Run: `dotnet test backend/KnowledgeHub.Tests --filter "MarkdownTextExtractorTests|DocumentProcessingJobTests"`
-Expected: PASS ×6。
+Expected: PASS ×7。
 
 - [ ] **Step 5: 端到端實測（spec 階段 3 驗收）**
 
