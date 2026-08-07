@@ -37,7 +37,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSingleton(builder.Configuration.GetSection("SeedUsers").Get<SeedUser[]>()!.AsEnumerable());
+var seedUsers = builder.Configuration.GetSection("SeedUsers").Get<SeedUser[]>()
+    ?? throw new InvalidOperationException("缺少 SeedUsers（appsettings.json）");
+builder.Services.AddSingleton(seedUsers.AsEnumerable());
 builder.Services.AddSingleton(new TokenService(jwtKey,
     builder.Configuration["Jwt:Issuer"]!, builder.Configuration["Jwt:Audience"]!));
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
@@ -54,10 +56,15 @@ builder.Services.AddScoped<DocumentProcessingJob>();
 builder.Services.AddScoped<IDocumentTextExtractor, PdfTextExtractor>();
 builder.Services.AddScoped<IDocumentTextExtractor, MarkdownTextExtractor>();
 builder.Services.AddScoped<RetrievalContext>();
-builder.Services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>(c =>
-        c.BaseAddress = new Uri("https://generativelanguage.googleapis.com/"))
-    .AddTypedClient<IEmbeddingService>((http, sp) =>
-        new GeminiEmbeddingService(http, builder.Configuration["Gemini:ApiKey"]!));
+var geminiApiKey = builder.Configuration["Gemini:ApiKey"]
+    ?? throw new InvalidOperationException("缺少 Gemini:ApiKey（user-secrets）");
+// 具名 HttpClient + AddTransient 手動組裝：AddHttpClient<TClient, TImpl> 產生的第一個 descriptor
+// 無法解析 GeminiEmbeddingService 建構子的 string apiKey 參數，只靠後續註冊順序才能覆蓋掉、
+// 靠順序活著的 DI 設定容易被後續改動悄悄弄壞。
+builder.Services.AddHttpClient("gemini-embedding", c =>
+    c.BaseAddress = new Uri("https://generativelanguage.googleapis.com/"));
+builder.Services.AddTransient<IEmbeddingService>(sp =>
+    new GeminiEmbeddingService(sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-embedding"), geminiApiKey));
 builder.Services.AddScoped<RetrievalPlugin>();
 builder.Services.AddScoped<EmailPlugin>();
 builder.Services.AddScoped<IChatService, SemanticKernelChatService>();
@@ -76,7 +83,7 @@ builder.Services.AddScoped(sp =>
     kb.AddOpenAIChatCompletion(
         modelId: chatModel,
         endpoint: new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
-        apiKey: builder.Configuration["Gemini:ApiKey"]!,
+        apiKey: geminiApiKey,
         httpClient: sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-chat"));
     var kernel = kb.Build();
     kernel.Plugins.AddFromObject(sp.GetRequiredService<RetrievalPlugin>(), "retrieval");

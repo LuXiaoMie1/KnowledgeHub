@@ -22,7 +22,7 @@ public class RetrievalPluginTests
         }
     }
 
-    private sealed class FakeUser : ICurrentUser { public string Department => "IT"; }
+    private sealed class FakeUser : ICurrentUser { public string Department => "IT"; public string Username => "it-user"; }
 
     private static readonly ChunkSearchResult Hit =
         new(Guid.NewGuid(), Guid.NewGuid(), "sop.md", 3, "重開 POS 主機的步驟…", 0.12);

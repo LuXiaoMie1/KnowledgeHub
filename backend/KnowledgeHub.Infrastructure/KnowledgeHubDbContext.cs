@@ -32,6 +32,8 @@ public class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext> optio
         {
             e.Property(m => m.To).HasMaxLength(320);
             e.Property(m => m.Subject).HasMaxLength(500);
+            e.Property(m => m.Department).HasMaxLength(50);
+            e.Property(m => m.RequestedBy).HasMaxLength(100);
         });
     }
 }

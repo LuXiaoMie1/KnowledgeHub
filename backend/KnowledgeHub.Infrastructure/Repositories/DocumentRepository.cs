@@ -32,11 +32,12 @@ public class DocumentRepository(KnowledgeHubDbContext db) : IDocumentRepository
         await db.SaveChangesAsync(ct);
     }
 
+    // 用 ExecuteUpdateAsync（不經 change tracker）：呼叫端（DocumentProcessingJob 失敗處理）
+    // 常與同一個 DbContext 上殘留的失敗 SaveChanges（例如 chunks 寫入失敗留下 Added 實體）共用，
+    // 若改走 change tracker 的 SaveChangesAsync，殘留的髒實體會讓這次狀態更新一併失敗，文件永卡 Processing。
     public async Task UpdateStatusAsync(Guid docId, DocumentStatus status, string? errorMessage = null, CancellationToken ct = default)
-    {
-        var doc = await db.Documents.FirstAsync(d => d.Id == docId, ct);
-        doc.Status = status;
-        doc.ErrorMessage = errorMessage;
-        await db.SaveChangesAsync(ct);
-    }
+        => await db.Documents.Where(d => d.Id == docId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.Status, status)
+                .SetProperty(d => d.ErrorMessage, errorMessage), ct);
 }

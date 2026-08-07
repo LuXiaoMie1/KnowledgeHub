@@ -22,7 +22,13 @@ const { documents, pollError, load, upload, remove } = useDocuments()
 const message = ref<string | null>(null)
 const isDragging = ref(false)
 
-onMounted(load)
+onMounted(async () => {
+  try {
+    await load()
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : '讀取文件清單失敗'
+  }
+})
 
 function validate(file: File): string | null {
   const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()

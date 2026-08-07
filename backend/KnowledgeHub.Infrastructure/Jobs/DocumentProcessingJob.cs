@@ -3,6 +3,7 @@ using KnowledgeHub.Core;
 using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
 using Microsoft.Data.SqlTypes;
+using Microsoft.Extensions.Logging;
 
 namespace KnowledgeHub.Infrastructure.Jobs;
 
@@ -10,7 +11,8 @@ public class DocumentProcessingJob(
     IDocumentRepository docs,
     IEnumerable<IDocumentTextExtractor> extractors,
     IEmbeddingService embedding,
-    UploadOptions upload)
+    UploadOptions upload,
+    ILogger<DocumentProcessingJob> logger)
 {
     [AutomaticRetry(Attempts = 0)] // 失敗不重試，狀態對使用者可見
     public async Task ProcessAsync(Guid documentId)
@@ -47,7 +49,11 @@ public class DocumentProcessingJob(
         }
         catch (Exception ex)
         {
-            await docs.UpdateStatusAsync(documentId, DocumentStatus.Failed, ex.Message);
+            // 例外原文（可能含第三方 API 回應內容，例如 Gemini embedding 的上游 body）不可存進
+            // ErrorMessage 原文送到前端，只記完整例外到 log，資料庫存分類後的短訊息。
+            logger.LogError(ex, "文件 {DocumentId} 處理失敗", documentId);
+            var message = ex is HttpRequestException ? "文字向量化失敗，請稍後重試" : "處理失敗";
+            await docs.UpdateStatusAsync(documentId, DocumentStatus.Failed, message);
             throw; // 不吞例外：Hangfire 面板要看得到
         }
     }

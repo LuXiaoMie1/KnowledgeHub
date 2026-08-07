@@ -21,8 +21,11 @@ public class DocumentsController(
 
     [HttpPost]
     [RequestSizeLimit(FrameworkMaxBytes)]
-    public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct = default)
+    public async Task<IActionResult> Upload(IFormFile? file, CancellationToken ct = default)
     {
+        if (file is null)
+            return BadRequest(new { error = "缺少檔案" });
+
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(ext))
             return BadRequest(new { error = "只接受 .pdf 或 .md 檔案" });

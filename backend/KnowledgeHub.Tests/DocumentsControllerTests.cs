@@ -31,7 +31,7 @@ public class DocumentsControllerTests
         public void Enqueue(Guid documentId) => Enqueued.Add(documentId);
     }
 
-    private sealed class FakeUser : ICurrentUser { public string Department => "IT"; }
+    private sealed class FakeUser : ICurrentUser { public string Department => "IT"; public string Username => "it-user"; }
 
     private static IFormFile File(string name, int sizeBytes)
     {
@@ -45,6 +45,17 @@ public class DocumentsControllerTests
         var queue = new FakeQueue();
         var ctrl = new DocumentsController(docs, queue, new FakeUser(), new UploadOptions(uploadRoot));
         return (ctrl, docs, queue);
+    }
+
+    [Fact]
+    public async Task 沒有檔案回400()
+    {
+        var (ctrl, docs, queue) = NewController(Path.GetTempPath());
+        var result = await ctrl.Upload(null);
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("缺少檔案", badRequest.Value!.GetType().GetProperty("error")!.GetValue(badRequest.Value));
+        Assert.Empty(docs.Added);
+        Assert.Empty(queue.Enqueued);
     }
 
     [Theory]

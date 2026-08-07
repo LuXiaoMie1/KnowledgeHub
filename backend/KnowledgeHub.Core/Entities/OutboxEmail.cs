@@ -7,4 +7,6 @@ public class OutboxEmail
     public string Subject { get; set; } = "";
     public string Body { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; }
+    public string Department { get; set; } = "";
+    public string RequestedBy { get; set; } = "";
 }
