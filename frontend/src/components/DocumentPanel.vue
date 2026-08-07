@@ -18,7 +18,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
   Failed: 'bg-red-100 text-red-700',
 }
 
-const { documents, load, upload, remove } = useDocuments()
+const { documents, pollError, load, upload, remove } = useDocuments()
 const message = ref<string | null>(null)
 const isDragging = ref(false)
 
@@ -72,6 +72,7 @@ async function onDelete(id: string) {
 <template>
   <div class="flex h-full flex-col gap-3">
     <p v-if="message" class="rounded bg-red-100 px-3 py-2 text-sm text-red-700">{{ message }}</p>
+    <p v-if="pollError" class="rounded bg-red-100 px-3 py-2 text-sm text-red-700">{{ pollError }}</p>
 
     <div
       class="flex flex-col items-center justify-center rounded border-2 border-dashed p-4 text-center text-sm"
