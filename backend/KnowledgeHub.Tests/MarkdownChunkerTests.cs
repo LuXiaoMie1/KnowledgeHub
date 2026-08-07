@@ -54,4 +54,14 @@ public class MarkdownChunkerTests
         Assert.Equal(3, chunks.Count);
         Assert.All(chunks, c => Assert.StartsWith("【長章節】\n", c));
     }
+
+    [Fact]
+    public void CRLF文件_多行段落不殘留控制字元()
+    {
+        var md = "# 標題\r\n行一\r\n行二";
+        var chunks = MarkdownChunker.Split(md);
+        Assert.Single(chunks);
+        Assert.DoesNotContain("\r", chunks[0]);
+        Assert.Contains("行一\n行二", chunks[0]);
+    }
 }

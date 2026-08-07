@@ -8,6 +8,7 @@ public static class MarkdownChunker
         text = (text ?? "").Trim();
         if (text.Length == 0) return [];
 
+        text = text.Replace("\r\n", "\n").Replace('\r', '\n');
         var lines = text.Split('\n');
         if (!lines.Any(IsHeading)) return TextChunker.Split(text, chunkSize, overlapRatio);
 
