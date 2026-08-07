@@ -80,9 +80,11 @@ flowchart TB
 cd backend/KnowledgeHub.Api
 dotnet user-secrets init
 dotnet user-secrets set "ConnectionStrings:Default" "<Azure SQL 連線字串>"
-dotnet user-secrets set "Gemini:ApiKey" "<Gemini API key>"
 dotnet user-secrets set "Jwt:SigningKey" "<JWT 簽章金鑰，任意長隨機字串>"
+dotnet user-secrets set "Vertex:SaKeyPath" "<服務帳戶金鑰 JSON 的本機路徑，例如 C:/secrets/knowledgehub-sa.json>"
 ```
+
+AI provider 是 Vertex AI，走服務帳戶 OAuth（不是 API key）。`Vertex:SaKeyPath` 只存**路徑**，金鑰 JSON 本身**放 repo 外任意位置、絕不進版控**。取得服務帳戶金鑰：在 GCP Console 建立服務帳戶並授予 Vertex AI User 角色，下載其 JSON 金鑰檔即可。`Vertex:ProjectId`／`Vertex:Location` 非機密，已直接寫在 `appsettings.json`。
 
 ### 資料庫 migration
 
@@ -133,9 +135,9 @@ dotnet test backend/KnowledgeHub.sln --filter "Category!=Integration"
 
 ## 資料安全
 
-本 repo 為公開作品集，開發／demo 階段使用 Google AI Studio 的 Gemini **免費層** API key。免費層資料會被 Google 用於模型訓練，因此**本 repo 與所有 demo 只餵入自製假資料**（虛構的 SOP、代碼、公司名稱），從未上傳任何真實公司文件或個資。
+本 repo 為公開作品集。開發初期曾用 Google AI Studio 的 Gemini **免費層** API key（免費層資料會被 Google 用於模型訓練），已於 2026-08 切換至 **Vertex AI**（Cloud 資料治理層級，不用於訓練，服務帳戶 OAuth 認證）。程式碼已透過 Core 層的 `IChatService`／`IEmbeddingService` 介面隔離 provider 實作，切換不影響其餘各層。
 
-正式導入公司內部使用時，需將 AI provider 切換為 **Vertex AI**（Cloud 資料治理層級，不用於訓練），才可餵入真實文件。程式碼已透過 Core 層的 `IChatService`／`IEmbeddingService` 介面隔離 provider 實作，切換不影響其餘各層。
+即使已切換至 Vertex AI，**本 repo 與所有 demo 仍只餵入自製假資料**（虛構的 SOP、代碼、公司名稱），從未上傳任何真實公司文件或個資。
 
 ## 擴充方向
 

@@ -1,4 +1,3 @@
-using System.Text;
 using Hangfire;
 using KnowledgeHub.Api.Auth;
 using KnowledgeHub.Core;
@@ -10,7 +9,6 @@ using KnowledgeHub.Infrastructure.Jobs;
 using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,20 +25,8 @@ builder.Services.AddDbContext<KnowledgeHubDbContext>(o =>
 var jwtKey = builder.Configuration["Jwt:SigningKey"]
     ?? throw new InvalidOperationException("缺少 Jwt:SigningKey（user-secrets）");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o =>
-    {
-        // JwtSecurityTokenHandler 預設會把 "sub" 這類標準 claim 自動改名成長版 URI
-        // （ClaimTypes.NameIdentifier），導致 CurrentUser 用字面 "sub" 找不到值而丟例外；
-        // 關掉這個舊行為，才能保留 "department"/"sub" 原始 claim 名。
-        o.MapInboundClaims = false;
-        o.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-            NameClaimType = "sub"
-        };
-    });
+    .AddJwtBearer(o => JwtBearerConfigurator.Configure(
+        o, jwtKey, builder.Configuration["Jwt:Issuer"], builder.Configuration["Jwt:Audience"]));
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 var seedUsers = builder.Configuration.GetSection("SeedUsers").Get<SeedUser[]>()
@@ -73,6 +59,9 @@ if (!File.Exists(vertexSaKeyPath))
     throw new InvalidOperationException($"Vertex:SaKeyPath 指向的檔案不存在或無法讀取：{vertexSaKeyPath}");
 // Transient：延續 GeminiThoughtSignatureHandler 的既有作法，讓具名 HttpClient 的連線池
 // （SocketsHttpHandler）正常隨 IHttpClientFactory 週期重建，不把 handler 綁死成 singleton。
+// 取捨：每次 handler chain 重建（預設約 2 分鐘一次）都會重新讀金鑰檔＋建立新
+// GoogleCredential，而不是整個 process 生命週期只讀一次；金鑰檔很小且只在本機讀取，
+// 換來的是與既有 pipeline 一致的生命週期管理，判斷利大於弊。
 builder.Services.AddTransient(_ => new GoogleOAuthHandler(vertexSaKeyPath));
 builder.Services.AddHttpClient("vertex-embedding", c =>
     c.BaseAddress = new Uri("https://aiplatform.googleapis.com/"))

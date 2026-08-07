@@ -40,7 +40,7 @@ public class GeminiEmbeddingServiceTests
             projectId: "test-project", location: "global");
 
     [Fact]
-    public async Task 請求含outputDimensionality1536與正確模型()
+    public async Task 請求含outputDimensionality1536與instances格式()
     {
         var handler = new FakeHandler(_ => [3f, 4f]);
         await NewService(handler).EmbedAsync(["哈囉"]);
