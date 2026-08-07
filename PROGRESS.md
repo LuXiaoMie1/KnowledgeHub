@@ -1,4 +1,13 @@
-# KnowledgeHub 進度（2026-08-07 Phase A 開發完成，待驗收與合併）
+# KnowledgeHub 進度（2026-08-07 收工存檔——Phase A＋Vertex 切換完成，真文件實驗進行中）
+
+## 明天回來的接續點（使用者說「明天再問」）
+
+1. **真文件實驗進行中**：使用者已把公司內控循環辦法 PDF（約 30 份）以 it-user 上傳完成，正在測問答品質；寄信 outbox 功能已實測（含稽核欄位）。待使用者回饋檢索品質體感 → 決定是否需要提前做 hybrid search
+2. **懸而未決：.spl 格式支援**——使用者要求支援，但 .spl 非標準格式，等使用者提供樣本檔路徑＋說明來源系統後再決定解法（已說明三種可能路徑）
+3. **未審查的三個小 commit**（最終審查之後加的 UI 便利功能，走了快速通道）：`0e4a52d` 登入頁自動帶密碼、`a76161c` 多檔上傳、`f63d31e` 資料夾上傳——**合併前應補一次輕量審查**
+4. **合併還沒做**：feature/phase-a → main（等使用者驗收滿意後執行 finishing-a-development-branch）
+5. 服務重啟指令（session 結束背景程序會停）：後端 `dotnet run --project backend/KnowledgeHub.Api --launch-profile https`、前端 `cd frontend && npm run dev`；首個請求等 Azure SQL 冷啟動
+6. 舊 AI Studio 帳戶/金鑰已全刪、user-secrets 已清（剩 Vertex:SaKeyPath／Jwt:SigningKey／ConnectionStrings:Default）；SA JSON 在 C:/Users/Q26030009/.gcp/knowledgehub/sa-key.json
 
 ## 狀態總覽
 
