@@ -2,13 +2,14 @@
 import { useAuth } from './composables/useAuth'
 import LoginView from './views/LoginView.vue'
 import DocumentPanel from './components/DocumentPanel.vue'
+import ChatPanel from './components/ChatPanel.vue'
 
 const { token, department, logout } = useAuth()
 </script>
 
 <template>
   <LoginView v-if="!token" />
-  <div v-else class="flex min-h-screen flex-col">
+  <div v-else class="flex h-screen flex-col">
     <header class="flex items-center justify-between border-b border-slate-200 px-6 py-3">
       <h1 class="text-lg font-semibold text-slate-900">KnowledgeHub</h1>
       <div class="flex items-center gap-3">
@@ -23,11 +24,13 @@ const { token, department, logout } = useAuth()
         </button>
       </div>
     </header>
-    <main class="flex flex-1">
-      <aside class="w-64 border-r border-slate-200 p-4">
+    <main class="flex flex-1 overflow-hidden">
+      <aside class="w-80 shrink-0 border-r border-slate-200 p-4">
         <DocumentPanel />
       </aside>
-      <section class="flex-1 p-4 text-sm text-slate-500">聊天視窗（待 Task 14）</section>
+      <section class="flex-1 overflow-hidden">
+        <ChatPanel />
+      </section>
     </main>
   </div>
 </template>
