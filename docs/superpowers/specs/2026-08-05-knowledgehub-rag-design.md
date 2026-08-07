@@ -25,7 +25,7 @@ Markdown 匯入的直接動機：團隊已有一套 Obsidian 維運知識庫（P
 |---|---|
 | 後端 | .NET 10（LTS）、ASP.NET Core Web API |
 | ORM/DB | EF Core 10 + Azure SQL Database 免費層（原生 `VECTOR(1536)`） |
-| AI | Gemini：chat 模型走設定 `Gemini:ChatModel`，預設 `gemini-flash-latest`（原定 `gemini-2.5-flash` 對 2026-08 後新發的 API key 已停供，實測 404）；`gemini-embedding-001`（指定 1536 維）。provider 以設定切換：開發用 AI Studio 免費層 key（**只餵假資料**，免費層資料會被 Google 用於訓練）；接真實公司文件時切 Vertex AI（Cloud 資料治理，不用於訓練，可吃 GCP 試用抵免額） |
+| AI | **Vertex AI（Agent Platform，2026-08-07 已切換）**：chat 走 OpenAI 相容端點 `v1beta1/projects/{p}/locations/global/endpoints/openapi/`（注意：v1+global 會 503），模型 `google/gemini-2.5-flash`（設定 `Gemini:ChatModel`）；embedding 走 `projects/{p}/locations/{l}/publishers/google/models/gemini-embedding-001:predict`（1536 維、手動 L2、批次 64 實測可行）。認證：服務帳戶 OAuth（`GoogleOAuthHandler`，JSON 金鑰路徑在 user-secrets `Vertex:SaKeyPath`）。資料治理：Vertex 產品層級不用於訓練，可餵真實公司文件；計費吃 GCP 試用額度。切換緣由：AI Studio 免費層資料會被訓練、付費 prepay 不吃試用額度（官方明文）、gemini-2.5-flash 對新 AI Studio key 停供——三個問題 Vertex 一次解決。SK 的 thought_signature 權宜解在 Vertex 端點不需要（已移除） |
 | Agent | Semantic Kernel（auto function calling） |
 | 背景工作 | Hangfire + Hangfire.SqlServer（同一顆 Azure SQL） |
 | PDF 解析 | PdfPig |
