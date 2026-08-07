@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 
+// demo 帳密本就公開於 README，直接帶入方便測試
 const DEMO_USERS = [
-  { username: 'hr-user', label: 'HR（hr-user）' },
-  { username: 'it-user', label: 'IT（it-user）' },
-  { username: 'fin-user', label: 'Finance（fin-user）' },
+  { username: 'hr-user', label: 'HR（hr-user）', password: 'demo-hr-2026' },
+  { username: 'it-user', label: 'IT（it-user）', password: 'demo-it-2026' },
+  { username: 'fin-user', label: 'Finance（fin-user）', password: 'demo-fin-2026' },
 ]
 
 const { login } = useAuth()
 const username = ref(DEMO_USERS[0].username)
-const password = ref('')
+const password = ref(DEMO_USERS[0].password)
+
+watch(username, (u) => {
+  password.value = DEMO_USERS.find((d) => d.username === u)?.password ?? ''
+})
 const error = ref<string | null>(null)
 const loading = ref(false)
 
@@ -56,6 +61,7 @@ async function onSubmit() {
           type="password"
           class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
         />
+        <p class="mt-1 text-xs text-slate-500">demo 密碼已自動帶入（demo-部門-2026）</p>
       </div>
 
       <p v-if="error" class="rounded bg-red-100 px-3 py-2 text-sm text-red-700">
