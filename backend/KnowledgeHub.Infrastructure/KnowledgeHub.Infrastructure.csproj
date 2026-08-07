@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" Version="1.75.0" />
     <PackageReference Include="Hangfire.Core" Version="1.8.24" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.24" />
     <!-- Hangfire.SqlServer 傳遞相依 Newtonsoft.Json 11.0.1 有已知漏洞（NU1903），明確 pin 至修補版 -->
