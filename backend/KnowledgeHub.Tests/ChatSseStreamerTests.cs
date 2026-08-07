@@ -2,6 +2,7 @@ using System.Text;
 using KnowledgeHub.Api.Sse;
 using KnowledgeHub.Core;
 using KnowledgeHub.Core.Interfaces;
+using Microsoft.Extensions.Logging.Abstractions;
 
 public class ChatSseStreamerTests
 {
@@ -16,10 +17,25 @@ public class ChatSseStreamerTests
         }
     }
 
+    // 模擬 client 斷線／請求被取消：吐出一個 token 後，觸發傳入的 CancellationTokenSource
+    // 並丟出對應該 token 的 OperationCanceledException（模擬 await foreach 因取消而中止）。
+    private sealed class CancelingChat(CancellationTokenSource cts) : IChatService
+    {
+        public async IAsyncEnumerable<string> StreamAnswerAsync(
+            string message, IReadOnlyList<ChatTurn> history,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            yield return "前半";
+            await Task.Yield();
+            cts.Cancel();
+            ct.ThrowIfCancellationRequested();
+        }
+    }
+
     private static async Task<string> RunAsync(IChatService chat, RetrievalContext context)
     {
         using var stream = new MemoryStream();
-        await new ChatSseStreamer(chat, context).StreamAsync(
+        await new ChatSseStreamer(chat, context, NullLogger<ChatSseStreamer>.Instance).StreamAsync(
             stream, "問題", [], CancellationToken.None);
         return Encoding.UTF8.GetString(stream.ToArray());
     }
@@ -57,6 +73,23 @@ public class ChatSseStreamerTests
             new FakeChat(["前半"], throwAfter: new InvalidOperationException("boom")), new RetrievalContext());
         Assert.Contains("event: token\ndata: {\"text\":\"前半\"}", output);
         Assert.Contains("event: error\n", output);
+        Assert.DoesNotContain("event: done", output);
+    }
+
+    [Fact]
+    public async Task 請求被取消_靜默結束_不拋出也不發error()
+    {
+        var cts = new CancellationTokenSource();
+        using var stream = new MemoryStream();
+        var streamer = new ChatSseStreamer(
+            new CancelingChat(cts), new RetrievalContext(), NullLogger<ChatSseStreamer>.Instance);
+
+        var ex = await Record.ExceptionAsync(() =>
+            streamer.StreamAsync(stream, "問題", [], cts.Token));
+
+        Assert.Null(ex);
+        var output = Encoding.UTF8.GetString(stream.ToArray());
+        Assert.DoesNotContain("event: error", output);
         Assert.DoesNotContain("event: done", output);
     }
 }

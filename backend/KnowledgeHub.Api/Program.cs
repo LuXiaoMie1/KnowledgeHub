@@ -48,6 +48,13 @@ builder.Services.AddHttpClient<IEmbeddingService, GeminiEmbeddingService>(c =>
 builder.Services.AddScoped<RetrievalPlugin>();
 builder.Services.AddScoped<EmailPlugin>();
 builder.Services.AddScoped<IChatService, SemanticKernelChatService>();
+// Gemini 的 OpenAI 相容端點在多輪 function calling 要求回填 thought_signature，
+// 而 SK 連接器不認得這個 Gemini 專屬欄位而遺失它，補一個 HttpClient handler 墊上佔位值。
+// 走 IHttpClientFactory 具名用戶端，讓連線池（SocketsHttpHandler）在每個請求間共用，
+// 避免 Kernel 這個 Scoped factory 每次請求都新建一個 HttpClient 造成連線池重建／socket 耗盡。
+builder.Services.AddTransient<GeminiThoughtSignatureHandler>();
+builder.Services.AddHttpClient("gemini-chat")
+    .AddHttpMessageHandler<GeminiThoughtSignatureHandler>();
 builder.Services.AddScoped(sp =>
 {
     var chatModel = builder.Configuration["Gemini:ChatModel"]
@@ -57,12 +64,7 @@ builder.Services.AddScoped(sp =>
         modelId: chatModel,
         endpoint: new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
         apiKey: builder.Configuration["Gemini:ApiKey"]!,
-        // Gemini 的 OpenAI 相容端點在多輪 function calling 要求回填 thought_signature，
-        // 而 SK 連接器不認得這個 Gemini 專屬欄位而遺失它，補一個 HttpClient handler 墊上佔位值。
-        httpClient: new HttpClient(new GeminiThoughtSignatureHandler
-        {
-            InnerHandler = new HttpClientHandler()
-        }));
+        httpClient: sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-chat"));
     var kernel = kb.Build();
     kernel.Plugins.AddFromObject(sp.GetRequiredService<RetrievalPlugin>(), "retrieval");
     kernel.Plugins.AddFromObject(sp.GetRequiredService<EmailPlugin>(), "email");
