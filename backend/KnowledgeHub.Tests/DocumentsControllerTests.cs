@@ -62,9 +62,11 @@ public class DocumentsControllerTests
     [Fact]
     public async Task 超過20MB回400()
     {
-        var (ctrl, _, _) = NewController(Path.GetTempPath());
+        var (ctrl, docs, queue) = NewController(Path.GetTempPath());
         var result = await ctrl.Upload(File("big.pdf", 21 * 1024 * 1024));
         Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(docs.Added);
+        Assert.Empty(queue.Enqueued);
     }
 
     [Fact]
@@ -96,5 +98,42 @@ public class DocumentsControllerTests
 
         Assert.IsType<NotFoundResult>(result);
         Assert.Contains(other, docs.Added); // 沒被刪
+    }
+
+    [Fact]
+    public async Task List只回自己部門的文件()
+    {
+        var (ctrl, docs, _) = NewController(Path.GetTempPath());
+        var itDoc1 = new CompanyDocument { Id = Guid.NewGuid(), Department = "IT", FileName = "it1.pdf" };
+        var itDoc2 = new CompanyDocument { Id = Guid.NewGuid(), Department = "IT", FileName = "it2.md" };
+        var hrDoc = new CompanyDocument { Id = Guid.NewGuid(), Department = "HR", FileName = "hr.pdf" };
+        docs.Added.AddRange([itDoc1, itDoc2, hrDoc]);
+
+        var result = await ctrl.List();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var items = Assert.IsAssignableFrom<IEnumerable<object>>(ok.Value).ToList();
+        var ids = items.Select(i => (Guid)i.GetType().GetProperty("Id")!.GetValue(i)!).ToList();
+        Assert.Equal(2, items.Count);
+        Assert.Equal(new[] { itDoc1.Id, itDoc2.Id }, ids);
+    }
+
+    [Fact]
+    public async Task 刪除同部門文件回204並清除檔案()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(root);
+        var (ctrl, docs, _) = NewController(root);
+        var doc = new CompanyDocument { Id = Guid.NewGuid(), Department = "IT", FileName = "sop.md" };
+        docs.Added.Add(doc);
+        var filePath = Path.Combine(root, $"{doc.Id}.md");
+        await System.IO.File.WriteAllTextAsync(filePath, "content");
+
+        var result = await ctrl.Delete(doc.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.DoesNotContain(doc, docs.Added);
+        Assert.False(System.IO.File.Exists(filePath));
+        Directory.Delete(root, recursive: true);
     }
 }

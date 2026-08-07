@@ -15,9 +15,12 @@ public class DocumentsController(
 {
     private static readonly string[] AllowedExtensions = [".pdf", ".md"];
     private const long MaxBytes = 20 * 1024 * 1024;
+    // 20–25MB 由本 controller 判斷回規格要求的 400；超過 25MB 由框架的 RequestSizeLimit
+    // 擋成 413，屬防護性上限（避免 MaxBytes 附近誤差讓真實請求被框架搶先擋成 413 而非 400）。
+    private const long FrameworkMaxBytes = 25 * 1024 * 1024;
 
     [HttpPost]
-    [RequestSizeLimit(MaxBytes + 1024)]
+    [RequestSizeLimit(FrameworkMaxBytes)]
     public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct = default)
     {
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
