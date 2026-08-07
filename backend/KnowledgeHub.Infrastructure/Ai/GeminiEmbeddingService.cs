@@ -31,9 +31,15 @@ public class GeminiEmbeddingService(HttpClient http, string apiKey) : IEmbedding
             request.Content = JsonContent.Create(payload);
 
             var response = await http.SendAsync(request, ct);
-            response.EnsureSuccessStatusCode();
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var summary = responseBody.Length > 500 ? responseBody[..500] : responseBody;
+                throw new HttpRequestException(
+                    $"Gemini embedding API 回傳非成功狀態 {(int)response.StatusCode} {response.StatusCode}：{summary}");
+            }
 
-            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            using var json = JsonDocument.Parse(responseBody);
             foreach (var e in json.RootElement.GetProperty("embeddings").EnumerateArray())
             {
                 var vector = e.GetProperty("values").EnumerateArray()
