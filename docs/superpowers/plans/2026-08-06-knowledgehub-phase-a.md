@@ -11,7 +11,7 @@
 ## Global Constraints（每個任務隱含遵守）
 
 - 依賴方向：`Api → Infrastructure → Core`；Core 只准引用 `Microsoft.Data.SqlClient`（為了 `SqlVector<float>` 型別），不得引用 EF 或任何 AI SDK。
-- Gemini chat：OpenAI 相容端點 `https://generativelanguage.googleapis.com/v1beta/openai/`，模型 `gemini-2.5-flash`。
+- Gemini chat：OpenAI 相容端點 `https://generativelanguage.googleapis.com/v1beta/openai/`，模型走設定 `Gemini:ChatModel`（預設 `gemini-flash-latest`；原定 `gemini-2.5-flash` 對新 API key 已停供，2026-08-07 實測 404）。多輪 function calling 需回帶 `thought_signature`——SK 1.79.0 連接器會丟棄，以 DelegatingHandler 注入官方 placeholder 補上（Task 9 實作）。
 - Gemini embedding：原生 REST `models/gemini-embedding-001:batchEmbedContents`，`outputDimensionality: 1536`，回傳向量**必須手動 L2 正規化**（官方要求：非 3072 維不自動正規化）。
 - 切片：Markdown 依標題分段＋標題路徑前綴（超長段落內部 500 字元、10% 重疊細切；無標題退回固定切片）；PDF 固定 500 字元、10% 重疊。檢索 TOP 5、cosine 距離；部門過濾前置且只查 `Completed` 文件。
 - 上傳限制：只收 `.pdf` / `.md`，≤ 20MB；embedding 批次 ≤ 64 段/次 HTTP。

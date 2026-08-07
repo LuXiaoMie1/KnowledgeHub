@@ -25,7 +25,7 @@ Markdown 匯入的直接動機：團隊已有一套 Obsidian 維運知識庫（P
 |---|---|
 | 後端 | .NET 10（LTS）、ASP.NET Core Web API |
 | ORM/DB | EF Core 10 + Azure SQL Database 免費層（原生 `VECTOR(1536)`） |
-| AI | Gemini：`gemini-2.5-flash`（chat）、`gemini-embedding-001`（指定 1536 維）。provider 以設定切換：開發用 AI Studio 免費層 key（**只餵假資料**，免費層資料會被 Google 用於訓練）；接真實公司文件時切 Vertex AI（Cloud 資料治理，不用於訓練，可吃 GCP 試用抵免額） |
+| AI | Gemini：chat 模型走設定 `Gemini:ChatModel`，預設 `gemini-flash-latest`（原定 `gemini-2.5-flash` 對 2026-08 後新發的 API key 已停供，實測 404）；`gemini-embedding-001`（指定 1536 維）。provider 以設定切換：開發用 AI Studio 免費層 key（**只餵假資料**，免費層資料會被 Google 用於訓練）；接真實公司文件時切 Vertex AI（Cloud 資料治理，不用於訓練，可吃 GCP 試用抵免額） |
 | Agent | Semantic Kernel（auto function calling） |
 | 背景工作 | Hangfire + Hangfire.SqlServer（同一顆 Azure SQL） |
 | PDF 解析 | PdfPig |
