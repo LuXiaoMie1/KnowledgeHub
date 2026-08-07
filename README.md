@@ -8,7 +8,7 @@
 |---|---|
 | 後端 | .NET 10、ASP.NET Core Web API |
 | ORM/DB | EF Core 10 + Azure SQL Database 免費層（原生 `VECTOR(1536)`） |
-| AI | Gemini（`gemini-flash-latest` 對話、`gemini-embedding-001` 1536 維向量） |
+| AI | Vertex AI Gemini（`google/gemini-2.5-flash` 對話、`gemini-embedding-001` 1536 維向量；服務帳戶 OAuth） |
 | Agent | Semantic Kernel（auto function calling） |
 | 背景工作 | Hangfire + Hangfire.SqlServer |
 | PDF 解析 | PdfPig |
@@ -43,7 +43,7 @@ flowchart TB
     end
 
     DB[(Azure SQL Database<br/>VECTOR(1536) + Documents/Chunks/Outbox)]
-    Gemini{{Gemini API<br/>chat + embedding}}
+    Gemini{{Vertex AI Gemini<br/>chat + embedding}}
 
     UI -- "JWT Bearer" --> Auth
     UI -- "POST /api/documents" --> Docs
