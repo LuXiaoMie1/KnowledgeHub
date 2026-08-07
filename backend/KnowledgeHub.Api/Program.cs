@@ -1,7 +1,10 @@
 using System.Text;
 using KnowledgeHub.Api.Auth;
+using KnowledgeHub.Core;
 using KnowledgeHub.Core.Interfaces;
 using KnowledgeHub.Infrastructure;
+using KnowledgeHub.Infrastructure.Ai;
+using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -34,6 +37,11 @@ builder.Services.AddSingleton(builder.Configuration.GetSection("SeedUsers").Get<
 builder.Services.AddSingleton(new TokenService(jwtKey,
     builder.Configuration["Jwt:Issuer"]!, builder.Configuration["Jwt:Audience"]!));
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IChunkRepository, ChunkRepository>();
+builder.Services.AddScoped<IOutboxEmailRepository, OutboxEmailRepository>();
+builder.Services.AddScoped<RetrievalContext>();
+builder.Services.AddScoped<RetrievalPlugin>();
+builder.Services.AddScoped<EmailPlugin>();
 
 var app = builder.Build();
 

@@ -1,28 +1,33 @@
-# KnowledgeHub 進度（2026-08-07 更新）
+# KnowledgeHub 進度（2026-08-07 執行中）
 
-## ✓ 已完成
+## 狀態總覽
 
-- 設計文件（已核准）：`docs/superpowers/specs/2026-08-05-knowledgehub-rag-design.md`
-  - 定位：企業 AI 助理平台（Phase A 知識庫問答＋Phase B EIP 待審助理 roadmap）
-  - AI 換成 Gemini：chat 走 OpenAI 相容端點＋SK OpenAI 連接器（SK Google 連接器仍 alpha，不用）；embedding 走原生 REST `gemini-embedding-001`＋`outputDimensionality:1536`＋手動 L2 正規化（皆已查證，2026-08-06）
-  - 支援 PDF＋Markdown（同事的 Obsidian vault 是第一批語料，開發期只用假資料版）
-- 2026-08-07 技術選型複審定案（與使用者討論）：
-  - 維持 .NET，不改寫 Python——定位為「.NET 生態 AI 工程師」，GitHub 屬個人研究性質無關鍵字急迫性；Python 之後以小型對照實驗 repo 練習
-  - 切片器升級為 Markdown 標題感知（`MarkdownChunker`，Task 3 併入、Task 11 依副檔名路由），設計文件 §7/§9 與計畫已同步修訂
-  - Hybrid search（BM25＋RRF）、reranker、評估集列入 backlog（設計文件新增 §13，README 擴充方向）
-- Phase A 實作計畫（已核准）：`docs/superpowers/plans/2026-08-06-knowledgehub-phase-a.md`（15 個任務，含完整測試碼/實作碼；2026-08-07 修訂 Task 3/11）
+Phase A 以 superpowers:subagent-driven-development 執行中，**7/15 任務完成**。
+詳細記錄（含每任務 commit 範圍、fix rounds、deferred minors）：`.superpowers/sdd/2026-08-06-knowledgehub-phase-a/progress.md`（SDD ledger，git-ignored）。
+
+## ✓ 已完成（皆通過 spec＋品質審查）
+
+1. 方案骨架、gitignore、CI（GitHub Actions 綠）
+2. Core 實體與介面（fix：改官方 Microsoft.Data.SqlTypes.SqlVector&lt;float&gt;）
+3. TextChunker＋MarkdownChunker，14 測試（fix：CRLF 正規化）
+4. DbContext＋migration 已對 Azure SQL 實跑，vector(1536) 確認
+5. ChunkRepository 向量搜尋（整合測試 2/2 實跑）
+6. JWT 認證（4/4＋curl 實測 200/401）
+7. GeminiEmbeddingService（fix：跨批次順序測試、非 200 診斷；24/24）
 
 ## → 進行中
 
-- 用 superpowers:subagent-driven-development 執行實作計畫，從 Task 1 開始（開工先跑 `scripts/sdd-workspace <計畫檔路徑>` 建 ledger）
+Task 8：RetrievalContext、RetrievalPlugin、EmailPlugin（含補 IChunkRepository DI 註冊）
 
-## □ 待使用者提供（到對應任務會用到）
+## 環境事實（重啟 session 必讀）
 
-- GitHub repo URL（Task 1 推 CI）
-- Azure SQL Database 免費層連線字串（Task 4）
-- Google AI Studio 的 Gemini API key（Task 9；免費層即可，開發只餵假資料）
+- 分支 `feature/phase-a`，remote：https://github.com/LuXiaoMie1/KnowledgeHub（public）
+- Azure SQL：`testqb.database.windows.net` / DB `free-sql-db-9033387`（免費層 serverless，冷啟動 30–60s）
+- 機密全在 user-secrets（Api 專案，ID 3fc8ee2a-…）：`ConnectionStrings:Default`、`Gemini:ApiKey`、`Jwt:SigningKey`——皆已實測有效
+- Gemini：1536 維 embedding 實測不自動正規化（norm 0.694），手動 L2 必要
+- 模型調度：轉錄型任務 haiku、整合型 sonnet、審查 sonnet；haiku 錯一次即升級（Task 2 案例）
 
-## 未驗證的假設
+## □ 待辦（Task 8 之後）
 
-- SK `AddOpenAIChatCompletion` 自訂 endpoint 的 overload 簽名（Task 9 有備案註記）
-- Vertex AI 可折抵 GCP $300 試用額度（接真資料前再驗，試用期至 2026-11-05）
+Task 9 SSE chat → 10 上傳 API → 11 Hangfire 管線 → 12–14 Vue 前端 → 15 端到端驗收＋README
+全部完成後：最終全分支審查（opus）→ finishing-a-development-branch
