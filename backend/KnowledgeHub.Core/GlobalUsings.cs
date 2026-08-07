@@ -1,1 +1,1 @@
-global using Microsoft.Data.SqlClient;
+global using Microsoft.Data.SqlTypes;

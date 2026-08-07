@@ -1,5 +1,5 @@
 namespace KnowledgeHub.Core.Entities;
-using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlTypes;
 
 public class DocumentChunk
 {
@@ -8,5 +8,5 @@ public class DocumentChunk
     public CompanyDocument Document { get; set; } = null!;
     public int SequenceNumber { get; set; }
     public string Content { get; set; } = "";
-    public SqlVector<float> Embedding { get; set; } = null!;
+    public SqlVector<float> Embedding { get; set; }
 }
