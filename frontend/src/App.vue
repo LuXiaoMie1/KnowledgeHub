@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useAuth } from './composables/useAuth'
 import LoginView from './views/LoginView.vue'
+import DocumentPanel from './components/DocumentPanel.vue'
 
 const { token, department, logout } = useAuth()
 </script>
@@ -23,8 +24,8 @@ const { token, department, logout } = useAuth()
       </div>
     </header>
     <main class="flex flex-1">
-      <aside class="w-64 border-r border-slate-200 p-4 text-sm text-slate-500">
-        文件清單（待 Task 13）
+      <aside class="w-64 border-r border-slate-200 p-4">
+        <DocumentPanel />
       </aside>
       <section class="flex-1 p-4 text-sm text-slate-500">聊天視窗（待 Task 14）</section>
     </main>
