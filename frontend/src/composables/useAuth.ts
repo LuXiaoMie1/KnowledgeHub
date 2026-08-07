@@ -13,7 +13,9 @@ export function useAuth() {
     if (!res.ok) throw new Error('帳號或密碼錯誤')
     token.value = (await res.json()).token
     // JWT payload 的 department claim（demo 等級解析，不驗簽）
-    department.value = JSON.parse(atob(token.value!.split('.')[1])).department
+    // JWT 是 base64url，department 若含特殊字元（+/ 對應 -_）需先轉回標準 base64 再 atob
+    const base64 = token.value!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    department.value = JSON.parse(atob(base64)).department
   }
   function logout() {
     token.value = null
