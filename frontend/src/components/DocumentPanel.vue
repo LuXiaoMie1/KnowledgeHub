@@ -37,31 +37,41 @@ function validate(file: File): string | null {
   return null
 }
 
-async function handleFile(file: File) {
+const uploading = ref(false)
+
+async function handleFiles(files: File[]) {
+  if (files.length === 0 || uploading.value) return
   message.value = null
-  const invalidReason = validate(file)
-  if (invalidReason) {
-    message.value = invalidReason
-    return
-  }
+  uploading.value = true
+  const failed: string[] = []
   try {
-    await upload(file)
-  } catch (e) {
-    message.value = e instanceof Error ? e.message : '上傳失敗'
+    for (const file of files) {
+      const invalidReason = validate(file)
+      if (invalidReason) {
+        failed.push(`${file.name}：${invalidReason}`)
+        continue
+      }
+      try {
+        await upload(file)
+      } catch (e) {
+        failed.push(`${file.name}：${e instanceof Error ? e.message : '上傳失敗'}`)
+      }
+    }
+  } finally {
+    uploading.value = false
   }
+  if (failed.length > 0) message.value = `${failed.length} 個檔案失敗——${failed.join('；')}`
 }
 
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (file) handleFile(file)
+  handleFiles(Array.from(input.files ?? []))
   input.value = ''
 }
 
 function onDrop(e: DragEvent) {
   isDragging.value = false
-  const file = e.dataTransfer?.files?.[0]
-  if (file) handleFile(file)
+  handleFiles(Array.from(e.dataTransfer?.files ?? []))
 }
 
 async function onDelete(id: string) {
@@ -87,10 +97,10 @@ async function onDelete(id: string) {
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
     >
-      <p>拖放檔案到此處，或</p>
-      <label class="mt-2 cursor-pointer rounded bg-slate-900 px-3 py-1 text-white">
-        選擇檔案
-        <input type="file" accept=".pdf,.md" class="hidden" @change="onFileChange" />
+      <p>拖放檔案到此處（可多選），或</p>
+      <label class="mt-2 cursor-pointer rounded bg-slate-900 px-3 py-1 text-white" :class="{ 'opacity-50': uploading }">
+        {{ uploading ? '上傳中…' : '選擇檔案' }}
+        <input type="file" accept=".pdf,.md" multiple class="hidden" :disabled="uploading" @change="onFileChange" />
       </label>
       <p class="mt-1 text-xs text-slate-400">僅接受 .pdf / .md，20MB 以內</p>
     </div>
