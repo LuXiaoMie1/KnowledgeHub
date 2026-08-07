@@ -10,6 +10,11 @@ namespace KnowledgeHub.Infrastructure.Ai;
 /// Google 官方文件（https://ai.google.dev/gemini-api/docs/thought-signatures）提供的相容路徑是：
 /// 帶入固定字串 "skip_thought_signature_validator" 可跳過該輪驗證。這個 handler 在請求送出前
 /// 幫遺漏的 tool_call 補上這個佔位值，屬於已知 Gemini↔OpenAI-相容層落差的暫時解法。
+///
+/// 僅 generativelanguage（AI Studio）端點需要。2026-08-07 切換到 Vertex AI 的
+/// v1beta1 openapi 相容端點後實測，多輪 function calling（search_knowledge_base、
+/// send_email）皆正常，不會回 400，因此 Program.cs 已不再把這個 handler 掛進
+/// gemini-chat 的 HttpClient pipeline。類別保留以備日後又切回 generativelanguage。
 /// </summary>
 public class GeminiThoughtSignatureHandler : DelegatingHandler
 {
