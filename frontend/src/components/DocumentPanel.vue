@@ -65,13 +65,55 @@ async function handleFiles(files: File[]) {
 
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
-  handleFiles(Array.from(input.files ?? []))
+  // 資料夾模式會夾帶非 pdf/md 的檔案，先靜默過濾再上傳
+  const files = Array.from(input.files ?? []).filter((f) => hasAllowedExtension(f.name))
+  handleFiles(files)
   input.value = ''
 }
 
-function onDrop(e: DragEvent) {
+function hasAllowedExtension(name: string): boolean {
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
+  return ALLOWED_EXTENSIONS.includes(ext)
+}
+
+// 遞迴展開拖放進來的資料夾（webkitGetAsEntry API）
+async function collectEntry(entry: FileSystemEntry): Promise<File[]> {
+  if (entry.isFile) {
+    const file = await new Promise<File>((resolve, reject) =>
+      (entry as FileSystemFileEntry).file(resolve, reject),
+    )
+    return hasAllowedExtension(file.name) ? [file] : []
+  }
+  if (entry.isDirectory) {
+    const reader = (entry as FileSystemDirectoryEntry).createReader()
+    const out: File[] = []
+    // readEntries 一次最多回 100 筆，要迴圈讀到空
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+        reader.readEntries(resolve, reject),
+      )
+      if (batch.length === 0) break
+      for (const child of batch) out.push(...(await collectEntry(child)))
+    }
+    return out
+  }
+  return []
+}
+
+async function onDrop(e: DragEvent) {
   isDragging.value = false
-  handleFiles(Array.from(e.dataTransfer?.files ?? []))
+  const items = Array.from(e.dataTransfer?.items ?? [])
+  const entries = items.map((i) => i.webkitGetAsEntry?.()).filter((x): x is FileSystemEntry => !!x)
+  if (entries.length > 0) {
+    const files = (await Promise.all(entries.map(collectEntry))).flat()
+    if (files.length === 0) {
+      message.value = '拖進來的內容沒有 .pdf / .md 檔案'
+      return
+    }
+    handleFiles(files)
+    return
+  }
+  handleFiles(Array.from(e.dataTransfer?.files ?? []).filter((f) => hasAllowedExtension(f.name)))
 }
 
 async function onDelete(id: string) {
@@ -97,11 +139,17 @@ async function onDelete(id: string) {
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
     >
-      <p>拖放檔案到此處（可多選），或</p>
-      <label class="mt-2 cursor-pointer rounded bg-slate-900 px-3 py-1 text-white" :class="{ 'opacity-50': uploading }">
-        {{ uploading ? '上傳中…' : '選擇檔案' }}
-        <input type="file" accept=".pdf,.md" multiple class="hidden" :disabled="uploading" @change="onFileChange" />
-      </label>
+      <p>拖放檔案或整個資料夾到此處，或</p>
+      <div class="mt-2 flex gap-2">
+        <label class="cursor-pointer rounded bg-slate-900 px-3 py-1 text-white" :class="{ 'opacity-50': uploading }">
+          {{ uploading ? '上傳中…' : '選擇檔案' }}
+          <input type="file" accept=".pdf,.md" multiple class="hidden" :disabled="uploading" @change="onFileChange" />
+        </label>
+        <label class="cursor-pointer rounded border border-slate-400 px-3 py-1 text-slate-700" :class="{ 'opacity-50': uploading }">
+          選擇資料夾
+          <input type="file" webkitdirectory class="hidden" :disabled="uploading" @change="onFileChange" />
+        </label>
+      </div>
       <p class="mt-1 text-xs text-slate-400">僅接受 .pdf / .md，20MB 以內</p>
     </div>
 
