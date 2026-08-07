@@ -50,9 +50,11 @@ builder.Services.AddScoped<EmailPlugin>();
 builder.Services.AddScoped<IChatService, SemanticKernelChatService>();
 builder.Services.AddScoped(sp =>
 {
+    var chatModel = builder.Configuration["Gemini:ChatModel"]
+        ?? throw new InvalidOperationException("缺少 Gemini:ChatModel（appsettings.json）");
     var kb = Kernel.CreateBuilder();
     kb.AddOpenAIChatCompletion(
-        modelId: builder.Configuration["Gemini:ChatModel"] ?? "gemini-2.5-flash",
+        modelId: chatModel,
         endpoint: new Uri("https://generativelanguage.googleapis.com/v1beta/openai/"),
         apiKey: builder.Configuration["Gemini:ApiKey"]!,
         // Gemini 的 OpenAI 相容端點在多輪 function calling 要求回填 thought_signature，
