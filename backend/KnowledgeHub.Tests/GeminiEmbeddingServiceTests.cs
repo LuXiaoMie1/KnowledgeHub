@@ -16,13 +16,13 @@ public class GeminiEmbeddingServiceTests
         {
             var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             CapturedBodies.Add(body);
-            var count = body.RootElement.GetProperty("requests").GetArrayLength();
-            var embeddings = Enumerable.Range(0, count)
-                .Select(_ => new { values = vectorFactory(_globalIndex++) })
+            var count = body.RootElement.GetProperty("instances").GetArrayLength();
+            var predictions = Enumerable.Range(0, count)
+                .Select(_ => new { embeddings = new { values = vectorFactory(_globalIndex++) } })
                 .ToList();
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(JsonSerializer.Serialize(new { embeddings }))
+                Content = new StringContent(JsonSerializer.Serialize(new { predictions }))
             };
         }
     }
@@ -36,8 +36,8 @@ public class GeminiEmbeddingServiceTests
     }
 
     private static GeminiEmbeddingService NewService(HttpMessageHandler handler) =>
-        new(new HttpClient(handler) { BaseAddress = new Uri("https://generativelanguage.googleapis.com/") },
-            apiKey: "test-key");
+        new(new HttpClient(handler) { BaseAddress = new Uri("https://aiplatform.googleapis.com/") },
+            projectId: "test-project", location: "global");
 
     [Fact]
     public async Task 請求含outputDimensionality1536與正確模型()
@@ -45,12 +45,39 @@ public class GeminiEmbeddingServiceTests
         var handler = new FakeHandler(_ => [3f, 4f]);
         await NewService(handler).EmbedAsync(["哈囉"]);
 
-        var req = handler.CapturedBodies.Single().RootElement
-            .GetProperty("requests")[0];
-        Assert.Equal(1536, req.GetProperty("outputDimensionality").GetInt32());
-        Assert.Equal("models/gemini-embedding-001", req.GetProperty("model").GetString());
-        Assert.Equal("哈囉", req.GetProperty("content").GetProperty("parts")[0]
-            .GetProperty("text").GetString());
+        var req = handler.CapturedBodies.Single().RootElement;
+        Assert.Equal(1536, req.GetProperty("parameters").GetProperty("outputDimensionality").GetInt32());
+        Assert.Equal("哈囉", req.GetProperty("instances")[0].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task 請求打到含projectId與location的Vertexpredict端點()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = new CapturingHandler(req => captured = req, [3f, 4f]);
+        var service = new GeminiEmbeddingService(
+            new HttpClient(handler) { BaseAddress = new Uri("https://aiplatform.googleapis.com/") },
+            projectId: "my-proj", location: "global");
+
+        await service.EmbedAsync(["x"]);
+
+        Assert.Equal(
+            "https://aiplatform.googleapis.com/v1/projects/my-proj/locations/global/publishers/google/models/gemini-embedding-001:predict",
+            captured!.RequestUri!.ToString());
+    }
+
+    private sealed class CapturingHandler(Action<HttpRequestMessage> onRequest, float[] vector) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct)
+        {
+            onRequest(request);
+            var predictions = new[] { new { embeddings = new { values = vector } } };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { predictions }))
+            });
+        }
     }
 
     [Fact]
@@ -73,8 +100,8 @@ public class GeminiEmbeddingServiceTests
 
         Assert.Equal(130, result.Count);
         Assert.Equal(3, handler.CapturedBodies.Count); // 64+64+2
-        Assert.Equal(64, handler.CapturedBodies[0].RootElement.GetProperty("requests").GetArrayLength());
-        Assert.Equal(2,  handler.CapturedBodies[2].RootElement.GetProperty("requests").GetArrayLength());
+        Assert.Equal(64, handler.CapturedBodies[0].RootElement.GetProperty("instances").GetArrayLength());
+        Assert.Equal(2,  handler.CapturedBodies[2].RootElement.GetProperty("instances").GetArrayLength());
     }
 
     [Fact]

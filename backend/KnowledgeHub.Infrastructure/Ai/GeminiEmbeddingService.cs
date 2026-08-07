@@ -4,11 +4,13 @@ using KnowledgeHub.Core.Interfaces;
 
 namespace KnowledgeHub.Infrastructure.Ai;
 
-public class GeminiEmbeddingService(HttpClient http, string apiKey) : IEmbeddingService
+public class GeminiEmbeddingService(HttpClient http, string projectId, string location) : IEmbeddingService
 {
+    // 實測（2026-08-07，Vertex predict 端點）：單請求 64 instances 回 200 且順序正確，
+    // 沿用與舊 batchEmbedContents 相同的批次大小。
     private const int BatchSize = 64;
     private const int Dimensions = 1536;
-    private const string Model = "models/gemini-embedding-001";
+    private const string Model = "gemini-embedding-001";
 
     public async Task<IReadOnlyList<float[]>> EmbedAsync(
         IReadOnlyList<string> texts, CancellationToken ct = default)
@@ -18,16 +20,11 @@ public class GeminiEmbeddingService(HttpClient http, string apiKey) : IEmbedding
         {
             var payload = new
             {
-                requests = batch.Select(t => new
-                {
-                    model = Model,
-                    content = new { parts = new[] { new { text = t } } },
-                    outputDimensionality = Dimensions
-                })
+                instances = batch.Select(t => new { content = t }),
+                parameters = new { outputDimensionality = Dimensions }
             };
             using var request = new HttpRequestMessage(HttpMethod.Post,
-                $"v1beta/{Model}:batchEmbedContents");
-            request.Headers.Add("x-goog-api-key", apiKey);
+                $"v1/projects/{projectId}/locations/{location}/publishers/google/models/{Model}:predict");
             request.Content = JsonContent.Create(payload);
 
             var response = await http.SendAsync(request, ct);
@@ -36,13 +33,13 @@ public class GeminiEmbeddingService(HttpClient http, string apiKey) : IEmbedding
             {
                 var summary = responseBody.Length > 500 ? responseBody[..500] : responseBody;
                 throw new HttpRequestException(
-                    $"Gemini embedding API 回傳非成功狀態 {(int)response.StatusCode} {response.StatusCode}：{summary}");
+                    $"Vertex embedding API 回傳非成功狀態 {(int)response.StatusCode} {response.StatusCode}：{summary}");
             }
 
             using var json = JsonDocument.Parse(responseBody);
-            foreach (var e in json.RootElement.GetProperty("embeddings").EnumerateArray())
+            foreach (var p in json.RootElement.GetProperty("predictions").EnumerateArray())
             {
-                var vector = e.GetProperty("values").EnumerateArray()
+                var vector = p.GetProperty("embeddings").GetProperty("values").EnumerateArray()
                     .Select(v => v.GetSingle()).ToArray();
                 all.Add(Normalize(vector));
             }
