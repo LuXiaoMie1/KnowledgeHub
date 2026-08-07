@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onUnmounted, ref, watch } from 'vue'
 import { useChat, type ChatMessage } from '../composables/useChat'
 import SourceCard from './SourceCard.vue'
 
-const { messages, sending, send } = useChat()
+const { messages, sending, send, cancel } = useChat()
 const input = ref('')
 const listEl = ref<HTMLElement | null>(null)
+
+onUnmounted(cancel)
 
 watch(
   messages,
