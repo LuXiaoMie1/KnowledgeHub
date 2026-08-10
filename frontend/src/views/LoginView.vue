@@ -9,7 +9,7 @@ const DEMO_USERS = [
   { username: 'fin-user', label: 'Finance（fin-user）', password: 'demo-fin-2026' },
 ]
 
-const { login } = useAuth()
+const { login, loginWithEntra, entraEnabled } = useAuth()
 const username = ref(DEMO_USERS[0].username)
 const password = ref(DEMO_USERS[0].password)
 
@@ -18,6 +18,7 @@ watch(username, (u) => {
 })
 const error = ref<string | null>(null)
 const loading = ref(false)
+const entraLoading = ref(false)
 
 async function onSubmit() {
   error.value = null
@@ -28,6 +29,18 @@ async function onSubmit() {
     error.value = e instanceof Error ? e.message : '登入失敗'
   } finally {
     loading.value = false
+  }
+}
+
+async function onEntraLogin() {
+  error.value = null
+  entraLoading.value = true
+  try {
+    await loginWithEntra()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '公司帳號登入失敗'
+  } finally {
+    entraLoading.value = false
   }
 }
 </script>
@@ -75,6 +88,23 @@ async function onSubmit() {
       >
         {{ loading ? '登入中…' : '登入' }}
       </button>
+
+      <template v-if="entraEnabled">
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <span class="h-px flex-1 bg-slate-200" />
+          或
+          <span class="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <button
+          type="button"
+          :disabled="entraLoading"
+          class="w-full rounded border border-slate-300 px-3 py-2 text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+          @click="onEntraLogin"
+        >
+          {{ entraLoading ? '登入中…' : '使用公司帳號登入' }}
+        </button>
+      </template>
     </form>
   </div>
 </template>

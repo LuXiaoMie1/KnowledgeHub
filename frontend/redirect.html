@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>登入處理中…</title>
+  </head>
+  <body>
+    <!--
+      MSAL v5 popup 流程專用回跳頁：Entra 登入完成後彈窗跳回這裡，
+      redirect-bridge 會把授權回應廣播（BroadcastChannel）回主視窗，
+      主視窗收到後關閉彈窗。v5 不再輪詢彈窗網址，缺這段腳本主視窗會 timed_out。
+      不能載入整個 SPA——app 啟動搶動網址會弄丟回應，還會觸發 block_nested_popups。
+    -->
+    登入處理中，此視窗將自動關閉…
+    <script type="module">
+      import { broadcastResponseToMainFrame } from '@azure/msal-browser/redirect-bridge'
+      broadcastResponseToMainFrame()
+    </script>
+  </body>
+</html>
