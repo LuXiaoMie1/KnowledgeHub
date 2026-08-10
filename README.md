@@ -86,6 +86,26 @@ dotnet user-secrets set "Vertex:SaKeyPath" "<服務帳戶金鑰 JSON 的本機�
 
 AI provider 是 Vertex AI，走服務帳戶 OAuth（不是 API key）。`Vertex:SaKeyPath` 只存**路徑**，金鑰 JSON 本身**放 repo 外任意位置、絕不進版控**。取得服務帳戶金鑰：在 GCP Console 建立服務帳戶並授予 Vertex AI User 角色，下載其 JSON 金鑰檔即可。`Vertex:ProjectId`／`Vertex:Location` 非機密，已直接寫在 `appsettings.json`。
 
+### Entra ID（公司帳號登入）
+
+認證是雙 scheme 並存：本機開發沿用種子帳號＋自簽 JWT，公司帳號改走 Entra ID（M365 租戶），依 token 的 issuer 自動分流（見 `Auth/EntraSchemeSelector.cs`），兩種 token 對 `[Authorize]` 端點都有效。
+
+`Entra:TenantId`／`Entra:ClientId`／`Entra:GroupDepartmentMap` 含真實租戶與公司安全性群組 Object ID，此 repo 是公開作品集，一律不進版控。二選一：
+
+- `dotnet user-secrets set "Entra:TenantId" "<租戶 ID>"`（`ClientId` 同理；`GroupDepartmentMap` 是巢狀物件，user-secrets 支援用冒號打巢狀 key，例如 `dotnet user-secrets set "Entra:GroupDepartmentMap:<群組 Object ID>" "IT"`）
+- 或在 `backend/KnowledgeHub.Api/appsettings.Local.json`（已被 `.gitignore` 排除，`dotnet run` 會自動載入、覆蓋 `appsettings.json` 的同名設定）填：
+  ```json
+  {
+    "Entra": {
+      "TenantId": "<租戶 ID>",
+      "ClientId": "<應用程式註冊的 Client ID>",
+      "GroupDepartmentMap": { "<群組 Object ID>": "IT" }
+    }
+  }
+  ```
+
+Entra 登入者的 access token audience 為 `api://<ClientId>`，需在應用程式註冊的 Expose an API 頁面把 Application ID URI 設成這個值。`groups` claim（安全性群組 Object ID，多值）依 `GroupDepartmentMap` 的宣告順序比對，第一個命中的群組決定部門（與既有種子帳號相同格式的 `department` claim）；沒有任何命中就不給部門 claim，下游 `ICurrentUser.Department` 會因此丟例外（維持既有「查無部門即拒絕」行為）；命中多個已映射群組時取第一個並記 log warning（聯集檢索是後續工作）。詳見 `Auth/EntraGroupDepartmentMapper.cs`。
+
 ### 資料庫 migration
 
 首次啟動前，對目標 Azure SQL 套用 migration：

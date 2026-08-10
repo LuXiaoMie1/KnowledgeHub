@@ -6,3 +6,4 @@ uploads/
 .env
 *.user
 .vs/
+appsettings.Local.json

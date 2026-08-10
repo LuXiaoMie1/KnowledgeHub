@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Hangfire;
 using KnowledgeHub.Api.Auth;
 using KnowledgeHub.Core;
@@ -9,9 +10,12 @@ using KnowledgeHub.Infrastructure.Jobs;
 using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Web;
 using Microsoft.SemanticKernel;
 
 var builder = WebApplication.CreateBuilder(args);
+// appsettings.Local.json：本機／公司租戶的真實 Entra 值放這裡，不進版控（見 .gitignore、README）。
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
 // Add services to the container.
 
@@ -24,9 +28,51 @@ builder.Services.AddDbContext<KnowledgeHubDbContext>(o =>
 
 var jwtKey = builder.Configuration["Jwt:SigningKey"]
     ?? throw new InvalidOperationException("缺少 Jwt:SigningKey（user-secrets）");
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o => JwtBearerConfigurator.Configure(
-        o, jwtKey, builder.Configuration["Jwt:Issuer"], builder.Configuration["Jwt:Audience"]));
+var entraTenantId = builder.Configuration["Entra:TenantId"]
+    ?? throw new InvalidOperationException("缺少 Entra:TenantId（appsettings.Local.json／user-secrets）");
+var entraClientId = builder.Configuration["Entra:ClientId"]
+    ?? throw new InvalidOperationException("缺少 Entra:ClientId（appsettings.Local.json／user-secrets）");
+var entraGroupDepartmentMap = EntraGroupDepartmentMapper.LoadGroupDepartmentMap(builder.Configuration);
+
+// 雙 authentication scheme 並存：本機開發沿用種子帳號的自簽 JWT（scheme "Bearer"），
+// 公司帳號改用 Entra ID（scheme "Entra"）。預設 scheme 是個 policy scheme，只看
+// token 的 issuer（不驗證簽章）決定轉給哪一個，[Authorize] 端點不用區分 token 來源。
+builder.Services.AddAuthentication(EntraSchemeSelector.PolicySchemeName)
+    .AddPolicyScheme(EntraSchemeSelector.PolicySchemeName, "依 token issuer 分流到 Entra 或既有自簽 JWT", o =>
+        o.ForwardDefaultSelector = EntraSchemeSelector.Select)
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, o => JwtBearerConfigurator.Configure(
+        o, jwtKey, builder.Configuration["Jwt:Issuer"], builder.Configuration["Jwt:Audience"]))
+    .AddMicrosoftIdentityWebApi(
+        _ => { },
+        identityOptions =>
+        {
+            identityOptions.Instance = "https://login.microsoftonline.com/";
+            identityOptions.TenantId = entraTenantId;
+            identityOptions.ClientId = entraClientId;
+        },
+        jwtBearerScheme: EntraSchemeSelector.EntraSchemeName);
+builder.Services.PostConfigure<JwtBearerOptions>(EntraSchemeSelector.EntraSchemeName, o =>
+{
+    // 同 JwtBearerConfigurator 的理由：關掉 inbound claim 改名，"groups" 與這裡另外
+    // 補上的 "department" 才能保留字面 claim 名，CurrentUser 不用分辨 token 來源。
+    // 實測確認過：AddMicrosoftIdentityWebApi 預設 MapInboundClaims=true，這行不是多餘的防呆。
+    o.MapInboundClaims = false;
+    // aud 依 API 端 manifest 的 accessTokenAcceptedVersion 而異：v1 token 是 api://{ClientId}、
+    // v2 token 是裸 ClientId，兩種都要收（只收其一會在前端接上時整批 401）。用 PostConfigure
+    // 確保晚於 AddMicrosoftIdentityWebApi 內部對 TokenValidationParameters 的設定執行，
+    // 不會被蓋掉（PostConfigure 一律晚於同一個 named options 的所有 Configure 執行）。
+    o.TokenValidationParameters.ValidAudiences = [entraClientId, $"api://{entraClientId}"];
+    var previousOnTokenValidated = o.Events?.OnTokenValidated;
+    o.Events ??= new JwtBearerEvents();
+    o.Events.OnTokenValidated = async context =>
+    {
+        if (previousOnTokenValidated is not null) await previousOnTokenValidated(context);
+        var logger = context.HttpContext.RequestServices
+            .GetRequiredService<ILoggerFactory>().CreateLogger("EntraGroupDepartmentMapper");
+        EntraGroupDepartmentMapper.ApplyDepartmentClaim(
+            (ClaimsIdentity)context.Principal!.Identity!, entraGroupDepartmentMap, logger);
+    };
+});
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 var seedUsers = builder.Configuration.GetSection("SeedUsers").Get<SeedUser[]>()
