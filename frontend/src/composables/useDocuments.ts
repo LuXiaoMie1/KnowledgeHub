@@ -24,7 +24,7 @@ async function safeError(res: Response, fallback: string): Promise<string> {
 }
 
 export function useDocuments() {
-  const { authHeader } = useAuth()
+  const { authHeader, checkNoDepartment } = useAuth()
   const documents = ref<DocumentInfo[]>([])
   const pollError = ref<string | null>(null)
   let timer: number | undefined
@@ -32,7 +32,10 @@ export function useDocuments() {
 
   async function load(): Promise<void> {
     const res = await fetch('/api/documents', { headers: authHeader() })
-    if (!res.ok) throw new Error(await safeError(res, '讀取文件清單失敗'))
+    if (!res.ok) {
+      if (await checkNoDepartment(res)) return
+      throw new Error(await safeError(res, '讀取文件清單失敗'))
+    }
     documents.value = await res.json()
     consecutiveFailures = 0
     pollError.value = null

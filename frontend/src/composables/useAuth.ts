@@ -7,6 +7,9 @@ import {
 
 const token = ref<string | null>(null)
 const department = ref<string | null>(null)
+// 已登入但沒有部門（不在任何已映射安全性群組）時，後端回 403 no_department，放這裡讓
+// App.vue 切到專屬畫面；非 null 代表要顯示該畫面。
+const noDepartmentMessage = ref<string | null>(null)
 
 const entraTenantId = import.meta.env.VITE_ENTRA_TENANT_ID
 const entraSpaClientId = import.meta.env.VITE_ENTRA_SPA_CLIENT_ID
@@ -45,6 +48,26 @@ function clearSession() {
   stopRefresh()
   token.value = null
   department.value = null
+  noDepartmentMessage.value = null
+}
+
+/**
+ * 後端 403 帶 { error: "no_department" } 時，記錄訊息讓 App.vue 顯示專屬畫面。
+ * 用 res.clone() 讀 body：回傳 false 時原始 response 的 body 還沒被消耗，
+ * 呼叫端（例如 safeError）可以照常再讀一次自己判斷要顯示的訊息。
+ */
+async function checkNoDepartment(res: Response): Promise<boolean> {
+  if (res.status !== 403) return false
+  try {
+    const body = await res.clone().json()
+    if (body?.error === 'no_department') {
+      noDepartmentMessage.value = body.message ?? '帳號尚未授權使用 KnowledgeHub，請聯絡資訊部'
+      return true
+    }
+  } catch {
+    // body 不是合法 JSON，不是我們要處理的情況
+  }
+  return false
 }
 
 /**
@@ -69,6 +92,7 @@ function scheduleRefresh(msal: IPublicClientApplication, account: AccountInfo, e
 
 export function useAuth() {
   async function login(username: string, password: string): Promise<void> {
+    noDepartmentMessage.value = null
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,6 +112,7 @@ export function useAuth() {
    * name/username，讓使用者看到自己是誰登入的；真正的部門過濾仍由後端 groups claim 映射決定。
    */
   async function loginWithEntra(): Promise<void> {
+    noDepartmentMessage.value = null
     const msal = await getMsalInstance()
     const result = await msal.loginPopup({ scopes: [entraApiScope] })
     msal.setActiveAccount(result.account)
@@ -101,5 +126,15 @@ export function useAuth() {
   function authHeader(): Record<string, string> {
     return token.value ? { Authorization: `Bearer ${token.value}` } : {}
   }
-  return { token, department, login, loginWithEntra, logout, authHeader, entraEnabled }
+  return {
+    token,
+    department,
+    noDepartmentMessage,
+    login,
+    loginWithEntra,
+    logout,
+    authHeader,
+    checkNoDepartment,
+    entraEnabled,
+  }
 }

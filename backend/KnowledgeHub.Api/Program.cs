@@ -9,6 +9,8 @@ using KnowledgeHub.Infrastructure.Extraction;
 using KnowledgeHub.Infrastructure.Jobs;
 using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Microsoft.SemanticKernel;
@@ -73,7 +75,20 @@ builder.Services.PostConfigure<JwtBearerOptions>(EntraSchemeSelector.EntraScheme
             (ClaimsIdentity)context.Principal!.Identity!, entraGroupDepartmentMap, logger);
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // 已通過驗證卻沒有部門（不在任何已映射安全性群組）的合法 token：預設 policy 要求
+    // department claim，讓這類請求在 [Authorize] 端點統一回明確的 403（而非讓
+    // CurrentUser.Department 丟例外變成 500）。DepartmentClaimRequirement／
+    // NoDepartmentAuthorizationMiddlewareResultHandler 負責把這個 403 寫成可辨識的
+    // no_department body，見兩者的類別註解。
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .AddRequirements(new DepartmentClaimRequirement())
+        .Build();
+});
+builder.Services.AddSingleton<IAuthorizationHandler, DepartmentClaimHandler>();
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, NoDepartmentAuthorizationMiddlewareResultHandler>();
 builder.Services.AddHttpContextAccessor();
 var seedUsers = builder.Configuration.GetSection("SeedUsers").Get<SeedUser[]>()
     ?? throw new InvalidOperationException("缺少 SeedUsers（appsettings.json）");

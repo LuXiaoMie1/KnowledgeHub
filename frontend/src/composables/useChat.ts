@@ -9,7 +9,7 @@ export interface ChatMessage { role: 'user' | 'assistant'; content: string; sour
 let controller: AbortController | null = null
 
 export function useChat() {
-  const { authHeader } = useAuth()
+  const { authHeader, checkNoDepartment } = useAuth()
   const messages = ref<ChatMessage[]>([])
   const sending = ref(false)
 
@@ -35,7 +35,11 @@ export function useChat() {
         body: JSON.stringify({ message: text, history }),
         signal: controller.signal,
       })
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        if (await checkNoDepartment(res)) return
+        throw new Error(`HTTP ${res.status}`)
+      }
+      if (!res.body) throw new Error(`HTTP ${res.status}`)
 
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       let buffer = ''
