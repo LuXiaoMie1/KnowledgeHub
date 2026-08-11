@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Hangfire;
 using KnowledgeHub.Api.Auth;
+using KnowledgeHub.Api.Bot;
 using KnowledgeHub.Core;
 using KnowledgeHub.Core.Interfaces;
 using KnowledgeHub.Infrastructure;
@@ -11,6 +12,9 @@ using KnowledgeHub.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
+using Microsoft.Bot.Builder;
+using Microsoft.Bot.Builder.Integration.AspNet.Core;
+using Microsoft.Bot.Connector.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Microsoft.SemanticKernel;
@@ -155,6 +159,21 @@ builder.Services.AddScoped(sp =>
     return kernel;
 });
 
+// Bot Framework：/api/messages 走 Bot Framework 自己的驗證機制（見下方端點的
+// AllowAnonymous），不套用既有 JWT/Entra scheme。Bot:MicrosoftAppId 留空時
+// ConfigurationBotFrameworkAuthentication 自動走匿名認證，本機用 Emulator
+// 連線不需要任何憑證；之後要串 Teams，把 Bot:MicrosoftAppId/Password/TenantId
+// 從 user-secrets 帶入正式值即可，不必改這裡的接線。
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<BotFrameworkAuthentication>(
+    _ => new ConfigurationBotFrameworkAuthentication(builder.Configuration.GetSection("Bot")));
+// 顯式指定用哪個建構子：CloudAdapter 同時有 (IConfiguration, IHttpClientFactory, ILogger)
+// 與 (BotFrameworkAuthentication, ILogger) 兩個建構子，DI 沒辦法自動判斷要用哪個
+// （會丟 ambiguous constructors），改用 factory 明確走後者。
+builder.Services.AddSingleton(sp =>
+    new CloudAdapter(sp.GetRequiredService<BotFrameworkAuthentication>(), sp.GetRequiredService<ILogger<CloudAdapter>>()));
+builder.Services.AddTransient<IBot, KnowledgeHubBotHandler>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -163,7 +182,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// /api/messages 豁免 HTTPS 轉址：Bot Framework Emulator 走 http 打進來，跟隨 307 到
+// https 埠時不信任本機自簽憑證會直接失敗（同 lessons 2026-08-10 的 Authorization 案例）。
+// 正式環境 bot 流量走 Azure Bot Service 的公開 https 端點，不受此豁免影響。
+app.UseWhen(
+    ctx => !ctx.Request.Path.StartsWithSegments("/api/messages"),
+    branch => branch.UseHttpsRedirection());
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -171,5 +195,12 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+
+// Bot Framework 端點：不掛 [Authorize]，明確 AllowAnonymous 避免之後全域政策異動
+// 誤把它納入驗證（Bot Framework 有自己的簽章驗證，見上方 BotFrameworkAuthentication 註冊）。
+app.MapPost("/api/messages", async (
+    HttpRequest request, HttpResponse response, CloudAdapter adapter, IBot bot, CancellationToken ct) =>
+    await adapter.ProcessAsync(request, response, bot, ct))
+    .AllowAnonymous();
 
 app.Run();

@@ -128,6 +128,17 @@ npm run dev                          # http://localhost:5173，/api 已 proxy �
 
 瀏覽器開 `http://localhost:5173` 即可登入使用。
 
+### Bot Framework（本機用 Emulator 測試）
+
+`/api/messages`（見 `Program.cs`、`Bot/KnowledgeHubBotHandler.cs`）是路線 D（Entra 驗證＋Teams bot）的骨架端點，目前只回覆固定格式的回音，RAG 接線為後續工作。本機零租戶依賴：`Bot:MicrosoftAppId` 留空時走匿名認證，不需要任何 Azure Bot 註冊或憑證。
+
+1. 下載並安裝 [Bot Framework Emulator](https://github.com/microsoft/BotFramework-Emulator/releases)（Windows/macOS/Linux 皆有）
+2. 啟動後端（`dotnet run --launch-profile https`，見上方「啟動」）
+3. 開啟 Emulator → `File > Open Bot`，Bot URL 填 `http://localhost:5106/api/messages`（或 `https://localhost:7152/api/messages`），App ID／App Password 留空 → `Connect`
+4. 在 Emulator 對話框輸入任意文字，應收到「收到：「訊息內容」（RAG 接線為後續工作）」的回覆
+
+之後串 Teams／Azure Bot Service，把 `Bot:MicrosoftAppType`／`MicrosoftAppId`／`MicrosoftAppPassword`／`MicrosoftAppTenantId` 從 user-secrets 帶入正式值即可，不需改程式碼。
+
 ### Azure SQL 免費層注意事項
 
 Azure SQL Database 免費層採 serverless，閒置一段時間後會自動暫停，**首個請求會有 30–60 秒的冷啟動延遲**。Demo 前請先呼叫 `GET /api/health` 喚醒資料庫，避免現場等待逾時。
