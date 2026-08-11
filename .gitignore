@@ -7,3 +7,4 @@ uploads/
 *.user
 .vs/
 appsettings.Local.json
+docs-private/
