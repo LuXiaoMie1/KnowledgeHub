@@ -1,3 +1,4 @@
+using KnowledgeHub.Api.Bot;
 using KnowledgeHub.Core;
 using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
@@ -22,12 +23,9 @@ public class RetrievalPluginTests
         }
     }
 
-    private sealed class FakeUser(params string[] departments) : ICurrentUser
+    private sealed class FakeDepartmentScope(params string[] departments) : IDepartmentScope
     {
-        public string Department => departments is [var only] ? only
-            : throw new InvalidOperationException("使用者屬於多個部門，無法使用單一部門語意");
         public IReadOnlyList<string> Departments => departments;
-        public string Username => "it-user";
     }
 
     private static readonly ChunkSearchResult Hit =
@@ -38,7 +36,7 @@ public class RetrievalPluginTests
     {
         var context = new RetrievalContext();
         var chunks = new FakeChunks([Hit]);
-        var plugin = new RetrievalPlugin(new FakeEmbedding(), chunks, context, new FakeUser("IT"));
+        var plugin = new RetrievalPlugin(new FakeEmbedding(), chunks, context, new FakeDepartmentScope("IT"));
 
         var answer = await plugin.SearchKnowledgeBaseAsync("POS 怎麼重開");
 
@@ -53,7 +51,7 @@ public class RetrievalPluginTests
     public async Task 無命中_回傳查無訊息_context保持空()
     {
         var context = new RetrievalContext();
-        var plugin = new RetrievalPlugin(new FakeEmbedding(), new FakeChunks([]), context, new FakeUser("IT"));
+        var plugin = new RetrievalPlugin(new FakeEmbedding(), new FakeChunks([]), context, new FakeDepartmentScope("IT"));
 
         var answer = await plugin.SearchKnowledgeBaseAsync("完全無關的問題");
 
@@ -66,10 +64,22 @@ public class RetrievalPluginTests
     {
         var context = new RetrievalContext();
         var chunks = new FakeChunks([Hit]);
-        var plugin = new RetrievalPlugin(new FakeEmbedding(), chunks, context, new FakeUser("IT", "HR"));
+        var plugin = new RetrievalPlugin(new FakeEmbedding(), chunks, context, new FakeDepartmentScope("IT", "HR"));
 
         await plugin.SearchKnowledgeBaseAsync("POS 怎麼重開");
 
         Assert.Equal(["IT", "HR"], chunks.QueriedDepartments);
+    }
+
+    [Fact]
+    public async Task Bot用AllDepartmentsScope_檢索傳入ALL而非任何部門()
+    {
+        var context = new RetrievalContext();
+        var chunks = new FakeChunks([Hit]);
+        var plugin = new RetrievalPlugin(new FakeEmbedding(), chunks, context, new AllDepartmentsScope());
+
+        await plugin.SearchKnowledgeBaseAsync("POS 怎麼重開");
+
+        Assert.Equal([Departments.All], chunks.QueriedDepartments);
     }
 }

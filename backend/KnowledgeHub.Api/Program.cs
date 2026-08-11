@@ -100,6 +100,7 @@ builder.Services.AddSingleton(seedUsers.AsEnumerable());
 builder.Services.AddSingleton(new TokenService(jwtKey,
     builder.Configuration["Jwt:Issuer"]!, builder.Configuration["Jwt:Audience"]!));
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IDepartmentScope, CurrentUserDepartmentScope>();
 builder.Services.AddScoped<IChunkRepository, ChunkRepository>();
 builder.Services.AddScoped<IOutboxEmailRepository, OutboxEmailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
@@ -143,20 +144,15 @@ builder.Services.AddScoped<IChatService, SemanticKernelChatService>();
 // thought_signature 佔位值（該問題只出現在 generativelanguage 端點，見該類別註解）。
 builder.Services.AddHttpClient("gemini-chat")
     .AddHttpMessageHandler<GoogleOAuthHandler>();
+var vertexChatEndpoint = new Uri(
+    $"https://aiplatform.googleapis.com/v1beta1/projects/{vertexProjectId}/locations/{vertexLocation}/endpoints/openapi/");
 builder.Services.AddScoped(sp =>
 {
     var chatModel = builder.Configuration["Gemini:ChatModel"]
         ?? throw new InvalidOperationException("缺少 Gemini:ChatModel（appsettings.json）");
-    var kb = Kernel.CreateBuilder();
-    kb.AddOpenAIChatCompletion(
-        modelId: chatModel,
-        endpoint: new Uri($"https://aiplatform.googleapis.com/v1beta1/projects/{vertexProjectId}/locations/{vertexLocation}/endpoints/openapi/"),
-        apiKey: "unused", // 真認證靠具名 HttpClient 上的 GoogleOAuthHandler，這裡 SK 連接器要求非空字串
-        httpClient: sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-chat"));
-    var kernel = kb.Build();
-    kernel.Plugins.AddFromObject(sp.GetRequiredService<RetrievalPlugin>(), "retrieval");
-    kernel.Plugins.AddFromObject(sp.GetRequiredService<EmailPlugin>(), "email");
-    return kernel;
+    return KernelFactory.Build(chatModel, vertexChatEndpoint,
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-chat"),
+        sp.GetRequiredService<RetrievalPlugin>(), sp.GetRequiredService<EmailPlugin>());
 });
 
 // Bot Framework：/api/messages 走 Bot Framework 自己的驗證機制（見下方端點的
@@ -173,6 +169,23 @@ builder.Services.AddSingleton<BotFrameworkAuthentication>(
 builder.Services.AddSingleton(sp =>
     new CloudAdapter(sp.GetRequiredService<BotFrameworkAuthentication>(), sp.GetRequiredService<ILogger<CloudAdapter>>()));
 builder.Services.AddTransient<IBot, KnowledgeHubBotHandler>();
+// bot 專用的 "bot" keyed 服務：與 web 端（/api/chat）完全獨立的一份 RetrievalPlugin／
+// Kernel／IChatService，理由見 KnowledgeHubBotHandler 類別註解——
+// 1) 部門範圍固定 AllDepartmentsScope（不經 ICurrentUser，匿名管道沒有 claim 可用）
+// 2) kernel 不掛 EmailPlugin（email: null，匿名管道不可觸發寄信）
+builder.Services.AddKeyedScoped<RetrievalPlugin>("bot", (sp, _) => new RetrievalPlugin(
+    sp.GetRequiredService<IEmbeddingService>(), sp.GetRequiredService<IChunkRepository>(),
+    sp.GetRequiredService<RetrievalContext>(), new AllDepartmentsScope()));
+builder.Services.AddKeyedScoped<Kernel>("bot", (sp, _) =>
+{
+    var chatModel = builder.Configuration["Gemini:ChatModel"]
+        ?? throw new InvalidOperationException("缺少 Gemini:ChatModel（appsettings.json）");
+    return KernelFactory.Build(chatModel, vertexChatEndpoint,
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("gemini-chat"),
+        sp.GetRequiredKeyedService<RetrievalPlugin>("bot"), email: null);
+});
+builder.Services.AddKeyedScoped<IChatService>("bot", (sp, _) =>
+    new SemanticKernelChatService(sp.GetRequiredKeyedService<Kernel>("bot")));
 
 var app = builder.Build();
 
