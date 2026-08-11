@@ -17,9 +17,7 @@ public static class EntraGroupDepartmentMapper
 
     /// <summary>
     /// 依 appsettings 裡 Entra:GroupDepartmentMap 的宣告順序讀出映射表。
-    /// 用 List 而非直接綁定 Dictionary：Dictionary 的列舉順序不受保證，但
-    /// 「使用者屬於多個已映射群組時取第一個命中」需要確定順序，所以直接用
-    /// IConfiguration.GetChildren() 保留設定檔裡的原始宣告順序。
+    /// 用 List 而非直接綁定 Dictionary：Dictionary 的列舉順序不受保證。
     /// </summary>
     public static IReadOnlyList<KeyValuePair<string, string>> LoadGroupDepartmentMap(IConfiguration configuration) =>
         configuration.GetSection("Entra:GroupDepartmentMap").GetChildren()
@@ -27,11 +25,10 @@ public static class EntraGroupDepartmentMapper
             .ToList();
 
     /// <summary>
-    /// 找映射表中第一個命中使用者 groups claim 的項目，加上 department claim。
-    /// 沒有任何命中就不加 claim——下游 ICurrentUser.Department 會因缺 claim
+    /// 找映射表中所有命中使用者 groups claim 的項目，逐一加上 department claim
+    /// （多部門聯集檢索需要使用者所屬的每一個部門，不能只取第一個）。
+    /// 沒有任何命中就不加 claim——下游 ICurrentUser.Department／Departments 會因缺 claim
     /// 丟 InvalidOperationException，維持既有「查無部門即拒絕」的行為。
-    /// 命中多個已映射群組時取映射表第一個並記 log warning（聯集檢索是後續
-    /// 獨立工作，本階段先簡化成單一部門，不在此次範圍內處理）。
     /// </summary>
     public static void ApplyDepartmentClaim(
         ClaimsIdentity identity,
@@ -41,17 +38,21 @@ public static class EntraGroupDepartmentMapper
         var groups = identity.FindAll(GroupsClaimType).Select(c => c.Value).ToHashSet();
         if (groups.Count == 0) return;
 
-        var hits = groupDepartmentMap.Where(kv => groups.Contains(kv.Key)).ToList();
-        if (hits.Count == 0) return;
+        var departments = groupDepartmentMap
+            .Where(kv => groups.Contains(kv.Key))
+            .Select(kv => kv.Value)
+            .Distinct()
+            .ToList();
+        if (departments.Count == 0) return;
 
-        if (hits.Count > 1)
+        if (departments.Count > 1)
         {
-            logger.LogWarning(
-                "使用者屬於多個已映射部門的群組（{Count} 個命中），取映射表第一個命中的部門 {Department}；" +
-                "聯集檢索為後續獨立工作，本次先簡化成單一部門。",
-                hits.Count, hits[0].Value);
+            logger.LogInformation(
+                "使用者屬於多個已映射部門的群組，加上 {Count} 個 department claim：{Departments}",
+                departments.Count, string.Join(", ", departments));
         }
 
-        identity.AddClaim(new Claim(DepartmentClaimType, hits[0].Value));
+        foreach (var department in departments)
+            identity.AddClaim(new Claim(DepartmentClaimType, department));
     }
 }

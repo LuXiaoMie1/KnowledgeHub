@@ -46,7 +46,9 @@ public class ChunkRepositoryTests : IAsyncLifetime
             (0, "HR 段落 0", BasisVector(0)));
         var pendingIt = NewDoc("pending.md", "IT", DocumentStatus.Pending,
             (0, "未完成文件的段落", BasisVector(0)));
-        _db.Documents.AddRange(itDoc, hrDoc, pendingIt);
+        var companyDoc = NewDoc("all.md", Departments.All, DocumentStatus.Completed,
+            (0, "全公司段落 0", BasisVector(0)));
+        _db.Documents.AddRange(itDoc, hrDoc, pendingIt, companyDoc);
         await _db.SaveChangesAsync();
     }
 
@@ -74,14 +76,15 @@ public class ChunkRepositoryTests : IAsyncLifetime
         var query = new float[1536];
         query[0] = 1f; // 與 BasisVector(0) 完全同向
 
-        var results = await repo.SearchSimilarChunksAsync(query, "IT", topK: 5);
+        var results = await repo.SearchSimilarChunksAsync(query, ["IT"], topK: 5);
 
-        // 只回 IT 且 Completed：命中 2 段（排除 HR 的與 Pending 的）
-        Assert.Equal(2, results.Count);
+        // 回 IT 與全公司文件、且 Completed：命中 3 段（排除 HR 的與 Pending 的）
+        Assert.Equal(3, results.Count);
         Assert.Equal("IT 段落 0", results[0].Content);   // 距離 0，排最前
-        Assert.Equal("IT 段落 1", results[1].Content);   // 距離 1
         Assert.True(results[0].Distance < 0.0001);
         Assert.Equal("it.md", results[0].FileName);
+        Assert.Contains(results, r => r.Content == "IT 段落 1");
+        Assert.Contains(results, r => r.Content == "全公司段落 0");
         Assert.DoesNotContain(results, r => r.Content.Contains("HR"));
         Assert.DoesNotContain(results, r => r.Content.Contains("未完成"));
     }
@@ -93,7 +96,22 @@ public class ChunkRepositoryTests : IAsyncLifetime
         var query = new float[1536];
         query[0] = 1f;
 
-        var results = await repo.SearchSimilarChunksAsync(query, "IT", topK: 1);
+        var results = await repo.SearchSimilarChunksAsync(query, ["IT"], topK: 1);
         Assert.Single(results);
+    }
+
+    [Fact]
+    public async Task 只查HR部門_仍能命中全公司文件()
+    {
+        var repo = new ChunkRepository(_db);
+        var query = new float[1536];
+        query[0] = 1f;
+
+        var results = await repo.SearchSimilarChunksAsync(query, ["HR"], topK: 5);
+
+        Assert.Equal(2, results.Count); // HR 段落 0 + 全公司段落 0
+        Assert.Contains(results, r => r.Content == "HR 段落 0");
+        Assert.Contains(results, r => r.Content == "全公司段落 0");
+        Assert.DoesNotContain(results, r => r.Content.StartsWith("IT"));
     }
 }

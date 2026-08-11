@@ -14,7 +14,12 @@ public class EmailPluginTests
         }
     }
 
-    private sealed class FakeUser : ICurrentUser { public string Department => "IT"; public string Username => "it-user"; }
+    private sealed class FakeUser : ICurrentUser
+    {
+        public string Department => "IT";
+        public IReadOnlyList<string> Departments => ["IT"];
+        public string Username => "it-user";
+    }
 
     [Fact]
     public async Task 寄信寫入outbox_欄位正確()

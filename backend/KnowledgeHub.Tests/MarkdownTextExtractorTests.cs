@@ -64,7 +64,7 @@ public class DocumentProcessingJobTests
         }
         public Task AddAsync(CompanyDocument doc, CancellationToken ct = default) => Task.CompletedTask;
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<CompanyDocument>> ListByDepartmentAsync(string d, CancellationToken ct = default)
+        public Task<IReadOnlyList<CompanyDocument>> ListByDepartmentsAsync(IReadOnlyList<string> d, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<CompanyDocument>>([]);
     }
 

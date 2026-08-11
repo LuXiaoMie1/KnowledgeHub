@@ -7,6 +7,9 @@ import {
 
 const token = ref<string | null>(null)
 const department = ref<string | null>(null)
+// 使用者所屬的全部部門（多部門聯集），來自 GET /api/me；上傳表單的部門選擇與部門顯示都用這個，
+// 不再用前端解出的單一 department（Entra 帳號無法在前端解出真正部門，見 loginWithEntra 註解）。
+const departments = ref<string[]>([])
 // 已登入但沒有部門（不在任何已映射安全性群組）時，後端回 403 no_department，放這裡讓
 // App.vue 切到專屬畫面；非 null 代表要顯示該畫面。
 const noDepartmentMessage = ref<string | null>(null)
@@ -48,6 +51,7 @@ function clearSession() {
   stopRefresh()
   token.value = null
   department.value = null
+  departments.value = []
   noDepartmentMessage.value = null
 }
 
@@ -104,6 +108,7 @@ export function useAuth() {
     // JWT 是 base64url，department 若含特殊字元（+/ 對應 -_）需先轉回標準 base64 再 atob
     const base64 = token.value!.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
     department.value = JSON.parse(atob(base64)).department
+    await loadDepartments()
   }
   /**
    * 公司帳號登入：loginPopup 直接要求 API scope 的 token（免另外再呼叫 acquireTokenSilent）。
@@ -119,6 +124,7 @@ export function useAuth() {
     token.value = result.accessToken
     department.value = result.account.name || result.account.username
     scheduleRefresh(msal, result.account, result.expiresOn)
+    await loadDepartments()
   }
   function logout() {
     clearSession()
@@ -126,9 +132,21 @@ export function useAuth() {
   function authHeader(): Record<string, string> {
     return token.value ? { Authorization: `Bearer ${token.value}` } : {}
   }
+  /** 查詢使用者所屬的全部部門（GET /api/me），供多部門聯集的上傳表單與部門顯示使用。 */
+  async function loadDepartments(): Promise<void> {
+    try {
+      const res = await fetch('/api/me', { headers: authHeader() })
+      if (!res.ok) return
+      const body = await res.json()
+      departments.value = Array.isArray(body.departments) ? body.departments : []
+    } catch {
+      departments.value = []
+    }
+  }
   return {
     token,
     department,
+    departments,
     noDepartmentMessage,
     login,
     loginWithEntra,

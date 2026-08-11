@@ -8,6 +8,12 @@ export interface DocumentInfo {
   chunkCount: number
   errorMessage: string | null
   uploadedAtUtc: string
+  isCompanyWide: boolean
+}
+
+export interface UploadOptions {
+  scope?: 'department' | 'company'
+  department?: string
 }
 
 const MAX_CONSECUTIVE_POLL_FAILURES = 3
@@ -68,9 +74,11 @@ export function useDocuments() {
     if (!busy) stopPolling()
   }
 
-  async function upload(file: File): Promise<void> {
+  async function upload(file: File, options?: UploadOptions): Promise<void> {
     const form = new FormData()
     form.append('file', file)
+    if (options?.scope) form.append('scope', options.scope)
+    if (options?.department) form.append('department', options.department)
     const res = await fetch('/api/documents', { method: 'POST', headers: authHeader(), body: form })
     if (!res.ok) throw new Error(await safeError(res, '上傳失敗'))
     await load()

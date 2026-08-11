@@ -47,15 +47,17 @@ public class EntraGroupDepartmentMapperTests
     }
 
     [Fact]
-    public void 多個已映射群組命中_取映射表第一個命中()
+    public void 多個已映射群組命中_全部加為department_claim()
     {
-        // 使用者同時屬於 HR 與 IT 群組（token 內順序故意反過來），
-        // 映射表宣告順序 IT 在前 → 應取 IT，不是 HR。
+        // 使用者同時屬於 HR 與 IT 群組（多部門聯集檢索，不再只取第一個）。
         var identity = IdentityWithGroups(HrGroupId, ItGroupId);
 
         EntraGroupDepartmentMapper.ApplyDepartmentClaim(identity, Map, NullLogger.Instance);
 
-        Assert.Equal("IT", identity.FindFirst("department")?.Value);
+        var departments = identity.FindAll("department").Select(c => c.Value).ToList();
+        Assert.Equal(2, departments.Count);
+        Assert.Contains("IT", departments);
+        Assert.Contains("HR", departments);
     }
 
     [Fact]

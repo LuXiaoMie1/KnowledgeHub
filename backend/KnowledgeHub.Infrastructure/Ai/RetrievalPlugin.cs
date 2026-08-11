@@ -16,7 +16,7 @@ public class RetrievalPlugin(
         [Description("要查詢的問題")] string query)
     {
         var vector = (await embedding.EmbedAsync([query]))[0];
-        var results = await chunks.SearchSimilarChunksAsync(vector, user.Department, topK: 5);
+        var results = await chunks.SearchSimilarChunksAsync(vector, user.Departments, topK: 5);
         if (results.Count == 0) return "知識庫中找不到相關資料。";
 
         context.Results.AddRange(results);

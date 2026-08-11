@@ -4,9 +4,21 @@ namespace KnowledgeHub.Api.Auth;
 
 public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {
-    public string Department =>
-        accessor.HttpContext?.User.FindFirst("department")?.Value
-        ?? throw new InvalidOperationException("缺少 department claim");
+    public IReadOnlyList<string> Departments
+    {
+        get
+        {
+            var departments = accessor.HttpContext?.User.FindAll("department")
+                .Select(c => c.Value).Distinct().ToList();
+            if (departments is null || departments.Count == 0)
+                throw new InvalidOperationException("缺少 department claim");
+            return departments;
+        }
+    }
+
+    public string Department => Departments.Count == 1
+        ? Departments[0]
+        : throw new InvalidOperationException("使用者屬於多個部門，無法使用單一部門語意");
 
     public string Username =>
         accessor.HttpContext?.User.FindFirst("sub")?.Value

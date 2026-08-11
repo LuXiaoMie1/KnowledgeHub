@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useDocuments } from '../composables/useDocuments'
+import { useAuth } from '../composables/useAuth'
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.md']
 const MAX_BYTES = 20 * 1024 * 1024
@@ -19,8 +20,22 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 }
 
 const { documents, pollError, load, upload, remove } = useDocuments()
+const { departments } = useAuth()
 const message = ref<string | null>(null)
 const isDragging = ref(false)
+
+// 上傳範圍：全公司共用（scope=company）或所屬部門（scope=department，多部門使用者需另選部門）。
+const isCompanyWide = ref(false)
+const selectedDepartment = ref<string | null>(null)
+watch(
+  departments,
+  (list) => {
+    if (list.length > 0 && (!selectedDepartment.value || !list.includes(selectedDepartment.value))) {
+      selectedDepartment.value = list[0]
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   try {
@@ -44,6 +59,9 @@ async function handleFiles(files: File[]) {
   message.value = null
   uploading.value = true
   const failed: string[] = []
+  const scope = isCompanyWide.value ? 'company' : 'department'
+  const department =
+    scope === 'department' && departments.value.length > 1 ? (selectedDepartment.value ?? undefined) : undefined
   try {
     for (const file of files) {
       const invalidReason = validate(file)
@@ -52,7 +70,7 @@ async function handleFiles(files: File[]) {
         continue
       }
       try {
-        await upload(file)
+        await upload(file, { scope, department })
       } catch (e) {
         failed.push(`${file.name}：${e instanceof Error ? e.message : '上傳失敗'}`)
       }
@@ -132,6 +150,19 @@ async function onDelete(id: string) {
     <p v-if="message" class="rounded bg-red-100 px-3 py-2 text-sm text-red-700">{{ message }}</p>
     <p v-if="pollError" class="rounded bg-red-100 px-3 py-2 text-sm text-red-700">{{ pollError }}</p>
 
+    <div class="flex flex-col gap-2 rounded border border-slate-200 p-3 text-sm">
+      <label class="flex items-center gap-2">
+        <input v-model="isCompanyWide" type="checkbox" />
+        全公司共用
+      </label>
+      <label v-if="!isCompanyWide && departments.length > 1" class="flex items-center gap-2">
+        部門
+        <select v-model="selectedDepartment" class="rounded border border-slate-300 px-2 py-1">
+          <option v-for="d in departments" :key="d" :value="d">{{ d }}</option>
+        </select>
+      </label>
+    </div>
+
     <div
       class="flex flex-col items-center justify-center rounded border-2 border-dashed p-4 text-center text-sm"
       :class="isDragging ? 'border-slate-500 bg-slate-100' : 'border-slate-300 text-slate-500'"
@@ -166,6 +197,9 @@ async function onDelete(id: string) {
             :class="STATUS_BADGE_CLASS[doc.status]"
           >
             {{ STATUS_LABEL[doc.status] }}
+          </span>
+          <span v-if="doc.isCompanyWide" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            全公司
           </span>
           <span class="text-xs text-slate-500">{{ doc.chunkCount }} 段落</span>
         </div>

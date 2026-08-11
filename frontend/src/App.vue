@@ -4,7 +4,7 @@ import LoginView from './views/LoginView.vue'
 import DocumentPanel from './components/DocumentPanel.vue'
 import ChatPanel from './components/ChatPanel.vue'
 
-const { token, department, noDepartmentMessage, logout } = useAuth()
+const { token, department, departments, noDepartmentMessage, logout } = useAuth()
 </script>
 
 <template>
@@ -21,7 +21,7 @@ const { token, department, noDepartmentMessage, logout } = useAuth()
       <h1 class="text-lg font-semibold text-slate-900">KnowledgeHub</h1>
       <div class="flex items-center gap-3">
         <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
-          {{ department }}
+          {{ departments.length > 0 ? departments.join('、') : department }}
         </span>
         <button
           class="rounded border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"

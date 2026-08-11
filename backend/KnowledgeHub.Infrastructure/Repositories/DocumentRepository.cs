@@ -10,8 +10,8 @@ public class DocumentRepository(KnowledgeHubDbContext db) : IDocumentRepository
     public Task<CompanyDocument?> GetAsync(Guid id, CancellationToken ct = default)
         => db.Documents.FirstOrDefaultAsync(d => d.Id == id, ct);
 
-    public async Task<IReadOnlyList<CompanyDocument>> ListByDepartmentAsync(string department, CancellationToken ct = default)
-        => await db.Documents.Where(d => d.Department == department)
+    public async Task<IReadOnlyList<CompanyDocument>> ListByDepartmentsAsync(IReadOnlyList<string> departments, CancellationToken ct = default)
+        => await db.Documents.Where(d => departments.Contains(d.Department) || d.Department == Departments.All)
             .OrderByDescending(d => d.UploadedAtUtc).ToListAsync(ct);
 
     public async Task AddAsync(CompanyDocument doc, CancellationToken ct = default)

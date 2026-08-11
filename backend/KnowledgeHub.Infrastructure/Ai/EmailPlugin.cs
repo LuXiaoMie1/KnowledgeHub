@@ -22,7 +22,9 @@ public class EmailPlugin(IOutboxEmailRepository outbox, ICurrentUser user)
         {
             Id = Guid.NewGuid(), To = to, Subject = subject, Body = body,
             CreatedAtUtc = DateTime.UtcNow,
-            Department = user.Department, RequestedBy = user.Username
+            // 稽核用途的單一部門標記：多部門使用者用 user.Department 會丟例外（見其註解），
+            // 這裡改用所屬部門的第一個做代表，不影響寄信本身的行為。
+            Department = user.Departments[0], RequestedBy = user.Username
         });
         return $"已寄出給 {to}。";
     }
