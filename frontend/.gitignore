@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 本機自簽憑證（內網跨機測試用，含私鑰，不進版控）
+.certs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
