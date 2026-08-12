@@ -145,13 +145,14 @@ Azure SQL Database 免費層採 serverless，閒置一段時間後會自動暫�
 
 ### Demo 帳號
 
-種子使用者（見 `appsettings.json` 的 `SeedUsers`），密碼為明文僅供本機 demo：
+種子使用者不進版控，走 `dotnet user-secrets` 設定（`appsettings.json` 的 `SeedUsers` 留空陣列；未設定時舊制帳密登入一律失敗，僅 Entra 登入可用）：
 
-| 帳號 | 密碼 | 部門 |
-|---|---|---|
-| `hr-user` | `demo-hr-2026` | HR |
-| `it-user` | `demo-it-2026` | IT |
-| `fin-user` | `demo-fin-2026` | Finance |
+```powershell
+dotnet user-secrets set "SeedUsers:0:Username" "hr-user" --project backend/KnowledgeHub.Api
+dotnet user-secrets set "SeedUsers:0:Password" "<自訂密碼>" --project backend/KnowledgeHub.Api
+dotnet user-secrets set "SeedUsers:0:Department" "HR" --project backend/KnowledgeHub.Api
+# 索引 1、2… 依此類推可加更多帳號
+```
 
 文件檢索與問答依登入者部門過濾，不同部門看不到彼此上傳的文件。
 
