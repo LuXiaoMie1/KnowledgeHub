@@ -43,11 +43,22 @@
 ## 2026-08-20 RAG 檢索品質（實測評估＋前兩項改善已做）
 
 - ✓ 實測評估：16 組查詢打真實語料（87 份文件），報告在 `docs-private\KnowledgeHub-RAG檢索評估-2026-08-20.md`。結論：向量檢索本身夠好（12/12 命中 top-2）、rerank/query rewriting 暫不需要；優先做門檻與去重
-- ✓ 相似度門檻：`Retrieval:MaxDistance = 0.38`（appsettings.json），RetrievalPlugin 過濾超標 chunk＋距離寫 log 供調參，web/bot 兩管道皆接上；單元測試 91 綠（新增 3 條門檻測試）。**未 commit**
+- ✓ 相似度門檻：`Retrieval:MaxDistance = 0.38`（appsettings.json），RetrievalPlugin 過濾超標 chunk＋距離寫 log 供調參，web/bot 兩管道皆接上（commit `b20c8e6`）
 - ✓ DB 去重：刪 12 份 IT 重複文件（逐 chunk 內容比對一致才刪，留最新）＋1 份 Failed 殘檔；清理後 74 份文件、1,024 chunks、重複歸零
 - □ 後續（按評估報告優先序）：檢索端去重保險 → 索引端清樣板雜訊/過短 chunk → 混合檢索（救代碼精確查詢）→ 視情況 rerank
 
+## 2026-08-20「公司專用 GPT」改版（分支 feature/company-gpt-ui，待合併）
+
+Spec：`docs/superpowers/specs/2026-08-20-company-gpt-ui-design.md`；Plan：`docs/superpowers/plans/2026-08-20-company-gpt-ui.md`。
+12 任務全數完成（subagent-driven，每任務獨立審查＋最終 opus 全分支審查＋fix wave）。
+
+- ✓ 後端對話保存：Conversation/ConversationMessage 表＋migration（已套 DB）、ConversationRepository、`/api/conversations` 系列 API（SSE 發話、清單、讀取、刪除；舊 `/api/chat` 移除）、UserKey 歸戶（Entra oid／種子 sub）
+- ✓ Teams bot 多輪：接續未結束對話、「新對話」/`/new` 指令、與 web 共用對話保存（AadObjectId 歸戶互通）——小債「bot 多輪對話歷史」了結
+- ✓ 前端：vue-router（/chat/:id?、/documents）、ChatGPT 式版面（側欄＋置中對話流＋手機抽屜）、Markdown 渲染（markdown-it＋DOMPurify）、品牌點綴＋RWD
+- → 待辦（合併前）：品牌色確認（暫定 #e4002b，`frontend/src/style.css` 一行替換）、使用者手動驗收（清單見交付訊息；重點：登出換帳號不得殘留前人對話、Teams 對話出現在 web 側欄驗 OID 歸戶）
+- 已知留存（最終審查 triage 為可留，詳見審查報告）：bot LLM 失敗會留空對話、GET 清單無分頁、刪除無二次確認、部署時需設 SPA fallback（排除 /redirect.html）等——列於 `.superpowers` ledger 與交付訊息
+
 ## 小債（沿前）
 
-- bot 多輪對話歷史、整合測試隔離資料、feature/bot-rag＋三條已合併舊分支未清
+- ~~bot 多輪對話歷史~~（2026-08-20 改版了結）、整合測試隔離資料（`ChunkRepositoryTests` 兩條筆數斷言 vs 共用 dev 庫真實資料，現況 2 敗）、feature/bot-rag＋三條已合併舊分支未清
 - ~~QB-PD-A1-001 在 ALL 重複兩份~~（2026-08-20 去重掃描已無此重複，了結）
