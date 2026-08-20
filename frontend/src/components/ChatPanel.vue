@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onUnmounted, ref, watch } from 'vue'
 import { useChat, type ChatMessage } from '../composables/useChat'
+import MarkdownContent from './MarkdownContent.vue'
 import SourceCard from './SourceCard.vue'
 
 const { messages, sending, send, cancel } = useChat()
@@ -59,8 +60,9 @@ function autoGrow(e: Event) {
           </div>
           <!-- assistant：無泡泡直排版 -->
           <div v-else class="space-y-2">
-            <div v-if="m.content" class="whitespace-pre-wrap text-sm text-slate-900">
-              {{ m.content }}<span v-if="isStreaming(m, i)" class="animate-pulse">▍</span>
+            <div v-if="m.content" class="text-sm text-slate-900">
+              <MarkdownContent :content="m.content" />
+              <span v-if="isStreaming(m, i)" class="animate-pulse">▍</span>
             </div>
             <p v-else-if="isStreaming(m, i)" class="text-sm text-slate-400">思考中…</p>
             <div v-if="m.error" class="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700">
