@@ -41,7 +41,7 @@ public class KnowledgeHubBotHandlerTests
         public Conversation? ActiveConversation;
         public List<ConversationMessage> Messages = [];
         public List<(string UserKey, string Channel, string Title, string? TeamsConversationId)> CreateCalls { get; } = [];
-        public List<(Guid ConversationId, string Role, string Content)> AppendCalls { get; } = [];
+        public List<(Guid ConversationId, string Role, string Content, string? SourcesJson)> AppendCalls { get; } = [];
         public List<Guid> EndCalls { get; } = [];
         public Exception? AppendException;
 
@@ -72,7 +72,7 @@ public class KnowledgeHubBotHandlerTests
         public Task AppendMessageAsync(Guid conversationId, string role, string content,
             string? sourcesJson = null, CancellationToken ct = default)
         {
-            AppendCalls.Add((conversationId, role, content));
+            AppendCalls.Add((conversationId, role, content, sourcesJson));
             if (AppendException is not null) throw AppendException;
             return Task.CompletedTask;
         }
@@ -106,14 +106,21 @@ public class KnowledgeHubBotHandlerTests
     {
         var context = new RetrievalContext();
         context.Results.Add(new ChunkSearchResult(Guid.NewGuid(), Guid.NewGuid(), "sop.md", 1, "重開步驟…", 0.1));
+        var repo = new FakeConversations();
         var bot = new KnowledgeHubBotHandler(new FakeChat(["重開", "POS 的步驟如上"]), context,
-            NullLogger<KnowledgeHubBotHandler>.Instance, new FakeConversations());
+            NullLogger<KnowledgeHubBotHandler>.Instance, repo);
 
         await new TestFlow(NewAdapter(), bot.OnTurnAsync)
             .Send("POS 怎麼重開")
             .AssertReply(a => Assert.Equal(ActivityTypes.Typing, a.Type))
             .AssertReply("重開POS 的步驟如上\n\n來源：sop.md")
             .StartTestAsync();
+
+        // M2：有檢索結果時，assistant 落庫要帶上與 ChatSseStreamer sources 事件同形（camelCase）
+        // 的 sourcesJson，讓 Teams 對話在 web 端重開時也能顯示來源卡片。
+        var assistantAppend = repo.AppendCalls.Single(c => c.Role == "assistant");
+        Assert.False(string.IsNullOrEmpty(assistantAppend.SourcesJson));
+        Assert.Contains("\"fileName\":\"sop.md\"", assistantAppend.SourcesJson);
     }
 
     [Fact]
@@ -177,8 +184,8 @@ public class KnowledgeHubBotHandlerTests
         var history = Assert.Single(chat.CapturedHistories);
         Assert.Equal(2, history.Count);
         Assert.Equal(2, repo.AppendCalls.Count);
-        Assert.Equal((existingId, "user", "接下來呢"), repo.AppendCalls[0]);
-        Assert.Equal((existingId, "assistant", "答"), repo.AppendCalls[1]);
+        Assert.Equal((existingId, "user", "接下來呢", (string?)null), repo.AppendCalls[0]);
+        Assert.Equal((existingId, "assistant", "答", (string?)null), repo.AppendCalls[1]);
     }
 
     [Fact]

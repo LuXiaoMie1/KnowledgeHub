@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using KnowledgeHub.Core;
 using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
@@ -21,7 +22,7 @@ namespace KnowledgeHub.Api.Bot;
 /// EmailPlugin（匿名管道不可觸發寄信），且 retrieval plugin 的部門範圍固定是
 /// <see cref="AllDepartmentsScope"/>（只查全公司共用文件），不會、也不能查到部門限定
 /// 文件。不要把這裡改成注入不帶 key 的 IChatService／Kernel——那一份是 web 端
-/// （/api/chat）專用，掛了 EmailPlugin 且部門範圍取自 ICurrentUser，兩者不可互換。
+/// （/api/conversations/messages）專用，掛了 EmailPlugin 且部門範圍取自 ICurrentUser，兩者不可互換。
 /// </summary>
 public class KnowledgeHubBotHandler(
     [FromKeyedServices("bot")] IChatService chat,
@@ -30,6 +31,11 @@ public class KnowledgeHubBotHandler(
     IConversationRepository conversations) : ActivityHandler
 {
     private const int MaxHistoryTurns = 10;
+
+    // 與 ChatSseStreamer 的 sources 事件同形（camelCase＋寬鬆轉義），讓 web 端重開 Teams
+    // 落庫的對話時，SourcesJson 能直接被前端既有的 JSON.parse(sourcesJson) 解析出來源卡片。
+    private static readonly JsonSerializerOptions JsonOpts =
+        new(JsonSerializerDefaults.Web) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     protected override async Task OnMessageActivityAsync(
         ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
@@ -53,6 +59,7 @@ public class KnowledgeHubBotHandler(
         string reply;
         Conversation? conversation = null;
         var rawAnswer = "";
+        string? sourcesJson = null;
         try
         {
             conversation = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken)
@@ -73,6 +80,8 @@ public class KnowledgeHubBotHandler(
             {
                 var sources = retrievalContext.Results.Select(r => r.FileName).Distinct();
                 reply += "\n\n來源：" + string.Join("、", sources);
+                sourcesJson = JsonSerializer.Serialize(retrievalContext.Results.Select(r => new
+                    { r.FileName, r.SequenceNumber, r.Content, r.Distance }), JsonOpts);
             }
         }
         catch (Exception ex)
@@ -91,7 +100,7 @@ public class KnowledgeHubBotHandler(
             try
             {
                 await conversations.AppendMessageAsync(conversation.Id, "user", text, ct: cancellationToken);
-                await conversations.AppendMessageAsync(conversation.Id, "assistant", rawAnswer, ct: cancellationToken);
+                await conversations.AppendMessageAsync(conversation.Id, "assistant", rawAnswer, sourcesJson, ct: cancellationToken);
             }
             catch (Exception ex)
             {
