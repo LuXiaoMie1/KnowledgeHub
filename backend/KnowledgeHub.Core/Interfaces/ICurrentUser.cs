@@ -11,4 +11,8 @@ public interface ICurrentUser
     IReadOnlyList<string> Departments { get; }
 
     string Username { get; }
+
+    /// <summary>對話歸戶用的穩定識別：Entra 使用者為 oid（object id），種子帳號為 sub（username）。
+    /// Teams activity 的 AadObjectId 是同一個 Entra oid，因此同一人 web/Teams 對話自然歸戶。</summary>
+    string UserKey { get; }
 }

@@ -47,4 +47,25 @@ public class CurrentUserTests
         var user = new CurrentUser(new HttpContextAccessor { HttpContext = context });
         Assert.Throws<InvalidOperationException>(() => user.Departments);
     }
+
+    private static CurrentUser CreateUser(params Claim[] claims)
+    {
+        var context = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims)) };
+        var accessor = new HttpContextAccessor { HttpContext = context };
+        return new CurrentUser(accessor);
+    }
+
+    [Fact]
+    public void UserKey_有oid時優先用oid()
+    {
+        var user = CreateUser(new Claim("oid", "entra-oid-123"), new Claim("sub", "alice"));
+        Assert.Equal("entra-oid-123", user.UserKey);
+    }
+
+    [Fact]
+    public void UserKey_無oid時退用sub()
+    {
+        var user = CreateUser(new Claim("sub", "alice"));
+        Assert.Equal("alice", user.UserKey);
+    }
 }

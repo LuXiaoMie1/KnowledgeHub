@@ -38,6 +38,7 @@ public class DocumentsControllerTests
             : throw new InvalidOperationException("使用者屬於多個部門，無法使用單一部門語意");
         public IReadOnlyList<string> Departments => departments;
         public string Username => "it-user";
+        public string UserKey => "test-user";
     }
 
     private static IFormFile File(string name, int sizeBytes)
