@@ -136,6 +136,8 @@ builder.Services.AddTransient<IEmbeddingService>(sp =>
     new GeminiEmbeddingService(
         sp.GetRequiredService<IHttpClientFactory>().CreateClient("vertex-embedding"),
         vertexProjectId, vertexLocation));
+builder.Services.AddSingleton(new RetrievalOptions(
+    builder.Configuration.GetValue("Retrieval:MaxDistance", 0.38)));
 builder.Services.AddScoped<RetrievalPlugin>();
 builder.Services.AddScoped<EmailPlugin>();
 builder.Services.AddScoped<IChatService, SemanticKernelChatService>();
@@ -175,7 +177,8 @@ builder.Services.AddTransient<IBot, KnowledgeHubBotHandler>();
 // 2) kernel 不掛 EmailPlugin（email: null，匿名管道不可觸發寄信）
 builder.Services.AddKeyedScoped<RetrievalPlugin>("bot", (sp, _) => new RetrievalPlugin(
     sp.GetRequiredService<IEmbeddingService>(), sp.GetRequiredService<IChunkRepository>(),
-    sp.GetRequiredService<RetrievalContext>(), new AllDepartmentsScope()));
+    sp.GetRequiredService<RetrievalContext>(), new AllDepartmentsScope(),
+    sp.GetRequiredService<RetrievalOptions>(), sp.GetRequiredService<ILogger<RetrievalPlugin>>()));
 builder.Services.AddKeyedScoped<Kernel>("bot", (sp, _) =>
 {
     var chatModel = builder.Configuration["Gemini:ChatModel"]

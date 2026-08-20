@@ -1,37 +1,53 @@
-# KnowledgeHub 進度（2026-08-07 收工存檔——Phase A＋Vertex 切換完成，真文件實驗進行中）
+# KnowledgeHub 進度（2026-08-18 存檔 — Teams 整合只剩「上傳 app」最後一步）
 
-## 明天回來的接續點（使用者說「明天再問」）
+## 下次開場（接續點）
 
-1. **真文件實驗進行中**：使用者已把公司內控循環辦法 PDF（約 30 份）以 it-user 上傳完成，正在測問答品質；寄信 outbox 功能已實測（含稽核欄位）。待使用者回饋檢索品質體感 → 決定是否需要提前做 hybrid search
-2. **懸而未決：.spl 格式支援**——使用者要求支援，但 .spl 非標準格式，等使用者提供樣本檔路徑＋說明來源系統後再決定解法（已說明三種可能路徑）
-3. **未審查的三個小 commit**（最終審查之後加的 UI 便利功能，走了快速通道）：`0e4a52d` 登入頁自動帶密碼、`a76161c` 多檔上傳、`f63d31e` 資料夾上傳——**合併前應補一次輕量審查**
-4. **合併還沒做**：feature/phase-a → main（等使用者驗收滿意後執行 finishing-a-development-branch）
-5. 服務重啟指令（session 結束背景程序會停）：後端 `dotnet run --project backend/KnowledgeHub.Api --launch-profile https`、前端 `cd frontend && npm run dev`；首個請求等 Azure SQL 冷啟動
-6. 舊 AI Studio 帳戶/金鑰已全刪、user-secrets 已清（剩 Vertex:SaKeyPath／Jwt:SigningKey／ConnectionStrings:Default）；SA JSON 在 C:/Users/Q26030009/.gcp/knowledgehub/sa-key.json
+1. **重啟兩件**（session 結束背景服務已停）：
+   - 後端：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`（等 Azure SQL 冷啟動 30–60s，看到 Now listening 才算好）
+   - tunnel：`& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe" host khub.jpe1`
+   - （前端 vite 與 Teams bot 無關，測 bot 不用起）
+2. **上傳 Teams app**：使用者 8/18 第一次上傳誤走「提交組織核准」流程（擱置中，可按垃圾桶刪）。正路＝Teams→應用程式→管理您的應用程式→上傳應用程式→選「**上傳自訂應用程式**」（不用核准）→ `teams-app\knowledgehub-teams-app.zip`。若沒有這選項＝sideload 政策沒套用，先登出重登 Teams，再不行查管理中心政策指派（KnowledgeHub-Dev-Sideload）
+3. 上傳成功後對 bot 發問實測（單輪、鎖 ALL 文件）。若 bot 沒回，看後端 log：401「No Authorization header」以外的錯才是真問題
+4. 通了之後收尾：teams-app/ commit 進 repo（appId 非機密可進公開 repo）、交接檔更新
 
-## 狀態總覽
 
-**15/15 任務完成＋最終全分支審查（opus）通過**：0 Critical；6 Important＋2 Minor 已由單一修復波修畢並經 scoped re-review 確認 8/8 ADDRESSED（commits `c1aa104`＋`c2e5602` migration＋`1b71834` Newtonsoft pin）。最終狀態：單元 52/52＋整合 2/2、npm build 乾淨、build 0 警告、CI 綠。分支 `feature/phase-a` HEAD `1b71834` 已推 GitHub。
-詳細記錄：`.superpowers/sdd/2026-08-06-knowledgehub-phase-a/progress.md`（SDD ledger，git-ignored）。
+> 歷史存檔（Phase A、Entra、內網直連）見 `docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md`。
 
-最終審查修復要點：文件處理狀態機防卡死（ExecuteUpdateAsync 繞開 change tracker）、上游 API 錯誤不再經 ErrorMessage 洩到前端、IEmbeddingService DI 除雙重註冊、chat history 伺服器端上限（10 turns/4000 字元）、設定 fail-fast 一致化、OutboxEmail 加 Department/RequestedBy 稽核欄位（migration 20260807055128 已上線）＋to 格式驗證。
+## 前置狀態（今日開場確認）
 
-## → 進行中／待辦（依序）
+- ✓ Entra 4 條 SPA redirect URI 使用者已加好並實測（同事內網直連登入 OK、群組→部門 claim 正確）
+- ✓ Teams 自訂應用程式上傳政策生效（用戶端已出現「上傳應用程式」按鈕，截圖確認）
+- main `7d6894d`，工作樹乾淨
 
-1. **使用者瀏覽器驗收**：服務已起（前端 http://localhost:5173、後端 https://localhost:7152，帳號 hr-user/it-user/fin-user，密碼在 appsettings SeedUsers）
-2. **Gemini 付費層儲值**：key 已切 Tier 1 Prepay 但**餘額 NT$0**（使用者在 Buy credits 畫面按了取消）→ 目前所有 Gemini 呼叫 429。待使用者完成 NT$1,000 儲值（Auto-reload 關閉）→ 實測 chat round-trip（含 Task 11/15 遞延的 sources 事件端到端）
-3. **真實公司文件實驗**（使用者主動提出）：內控循環辦法 PDF 批次上傳。**紅線：必須付費層生效後才可上傳**（免費層資料會被 Google 訓練，已與使用者確認）。待使用者：下載 PDF 到資料夾＋告知路徑＋決定部門歸屬（建議單一帳號上傳）；我寫批次上傳腳本
-4. **合併**：驗收 OK 後 superpowers:finishing-a-development-branch（merge 到 main、刪 SDD workspace）
+## Teams/Azure Bot 整合計畫
 
-## 關鍵環境事實（重啟 session 必讀）
+- ✓ 1. Azure CLI 2.89.1 已裝（winget）
+- ✓ 2. az login 完成（device code；訂閱 bcdb62f8-…、租戶 9713fce3-…）
+- ✓ 3. tunnel 5106 埠已開（使用者執行；`https://25630g9l-5106.jpe1.devtunnels.ms`）
+- ✓ 4a. App registration「KnowledgeHub-Bot」建好：appId `2629b8d6-a548-4c0c-9eb0-a1971cc16494`（single-tenant）
+- ✓ 4b. client secret 已由使用者發（bot-dev，效期 1 年）
+- ✓ 5. Azure Bot F0 `knowledgehub-dev-bot` 建好（rg-knowledgehub-dev），endpoint 指 tunnel 5106 `/api/messages`，Teams channel 已啟用
+- ✓ 6. 四鍵已入 user-secrets（AppType=SingleTenant/AppId/Password/TenantId），list 確認存在
+- ✓ 7. manifest（真實 appId 已填）＋icons＋zip：`teams-app/knowledgehub-teams-app.zip`
+- ✓ 8a. 後端＋tunnel host 已起；驗證：本機 POST /api/messages 未簽章→401（Bot 驗證生效）；經 tunnel 繞 DNS 直打（4.190.51.35）→401（外部可達）
+- → 8b. **使用者上傳 zip**（Teams→應用程式→管理您的應用程式→上傳應用程式→選 `teams-app\knowledgehub-teams-app.zip`）→ 對 bot 發問實測
+- □ 9. 收尾：交接檔更新、commit（teams-app/ 進 repo；secret 不進。注意 manifest 含 appId——公開 repo 可接受，appId 非機密）
 
-- Gemini 計費查證（2026-08-07，報告：~/.claude/jobs/3b553121/tmp/gemini-billing-research.md）：GCP $300 試用額度**不能**付 AI Studio Gemini API（官方明文排除）；AI Studio 付費=Prepay 儲值（不可退、一年效期）；付費層資料不用於訓練（2026-03-23 條款）、免費層會＋人工審閱；Vertex AI 大機率吃試用額度＋產品層級不訓練承諾——正式上線路線
-- 分支 `feature/phase-a`，remote：https://github.com/LuXiaoMie1/KnowledgeHub（public）
-- Azure SQL：`testqb.database.windows.net` / DB `free-sql-db-9033387`（免費層 serverless，冷啟動 30–60s）
-- 機密全在 user-secrets（Api 專案，ID 3fc8ee2a-…）：`ConnectionStrings:Default`、`Gemini:ApiKey`、`Jwt:SigningKey`
-- Gemini：1536 維 embedding 不自動正規化（手動 L2 必要）；gemini-2.5-flash 對新 key 停供（ChatModel 設定預設 gemini-flash-latest）；SK 1.79.0 丟 thought_signature（DelegatingHandler 權宜解）；function-calling 一次提問內部 ≥2 次 API 呼叫，配額消耗要分開判斷
-- 模型調度經驗：轉錄型 haiku、整合型 sonnet、審查 sonnet（複雜棒次 opus）；haiku 錯一次即升級
+## 環境事實
 
-## ✓ Phase A 完成清單（15 任務皆過任務審查；細節見 git log 與 ledger）
+- tunnel `khub.jpe1`：現有 5173(https) 一埠，Anonymous connect，效期還有 ~24 天
+- devtunnel.exe：`$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe`
+- 後端埠：https 7152 / http 5106；bot 匿名模式現況＝Emulator 用，填 MicrosoftAppId 後改走 Bot Framework 簽章驗證
+- 服務重啟三件組：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`、`npm run dev --prefix frontend`、`devtunnel host khub.jpe1`
 
-骨架/CI、Core 實體介面、雙切片器（Markdown 標題感知＋CRLF 修正）、EF+VECTOR(1536) migration、向量檢索（部門過濾）、JWT、Gemini embedding（L2 正規化＋跨批次順序保證）、SK plugins（檢索/寄信）、SSE chat（斷線/例外硬化）、上傳 API（部門隔離）、Hangfire 管線、Vue 登入/文件面板（輪詢三振）/聊天（打字機＋來源卡片＋卸載中止）、README 完稿
+## 2026-08-20 RAG 檢索品質（實測評估＋前兩項改善已做）
+
+- ✓ 實測評估：16 組查詢打真實語料（87 份文件），報告在 `docs-private\KnowledgeHub-RAG檢索評估-2026-08-20.md`。結論：向量檢索本身夠好（12/12 命中 top-2）、rerank/query rewriting 暫不需要；優先做門檻與去重
+- ✓ 相似度門檻：`Retrieval:MaxDistance = 0.38`（appsettings.json），RetrievalPlugin 過濾超標 chunk＋距離寫 log 供調參，web/bot 兩管道皆接上；單元測試 91 綠（新增 3 條門檻測試）。**未 commit**
+- ✓ DB 去重：刪 12 份 IT 重複文件（逐 chunk 內容比對一致才刪，留最新）＋1 份 Failed 殘檔；清理後 74 份文件、1,024 chunks、重複歸零
+- □ 後續（按評估報告優先序）：檢索端去重保險 → 索引端清樣板雜訊/過短 chunk → 混合檢索（救代碼精確查詢）→ 視情況 rerank
+
+## 小債（沿前）
+
+- bot 多輪對話歷史、整合測試隔離資料、feature/bot-rag＋三條已合併舊分支未清
+- ~~QB-PD-A1-001 在 ALL 重複兩份~~（2026-08-20 去重掃描已無此重複，了結）

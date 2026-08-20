@@ -2,6 +2,7 @@ using KnowledgeHub.Core;
 using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
 using KnowledgeHub.Infrastructure.Ai;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.SemanticKernel;
 
 // KernelFactory：bot 管道用來組 kernel 的同一份邏輯，重點驗證「不給 EmailPlugin 就真的
@@ -40,7 +41,8 @@ public class KernelFactoryTests
     }
 
     private static RetrievalPlugin NewRetrievalPlugin() =>
-        new(new FakeEmbedding(), new FakeChunks(), new RetrievalContext(), new FakeDepartmentScope());
+        new(new FakeEmbedding(), new FakeChunks(), new RetrievalContext(), new FakeDepartmentScope(),
+            new RetrievalOptions(MaxDistance: 0.38), NullLogger<RetrievalPlugin>.Instance);
 
     [Fact]
     public void 不給EmailPlugin_kernel不含email外掛_只含retrieval()
