@@ -1,14 +1,20 @@
-# KnowledgeHub 進度（2026-08-18 存檔 — Teams 整合只剩「上傳 app」最後一步）
+# KnowledgeHub 進度（2026-08-20 存檔 — 公司 GPT 改版完工待驗收，在 feature/company-gpt-ui）
 
 ## 下次開場（接續點）
 
-1. **重啟兩件**（session 結束背景服務已停）：
-   - 後端：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`（等 Azure SQL 冷啟動 30–60s，看到 Now listening 才算好）
-   - tunnel：`& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe" host khub.jpe1`
-   - （前端 vite 與 Teams bot 無關，測 bot 不用起）
-2. **上傳 Teams app**：使用者 8/18 第一次上傳誤走「提交組織核准」流程（擱置中，可按垃圾桶刪）。正路＝Teams→應用程式→管理您的應用程式→上傳應用程式→選「**上傳自訂應用程式**」（不用核准）→ `teams-app\knowledgehub-teams-app.zip`。若沒有這選項＝sideload 政策沒套用，先登出重登 Teams，再不行查管理中心政策指派（KnowledgeHub-Dev-Sideload）
-3. 上傳成功後對 bot 發問實測（單輪、鎖 ALL 文件）。若 bot 沒回，看後端 log：401「No Authorization header」以外的錯才是真問題
-4. 通了之後收尾：teams-app/ commit 進 repo（appId 非機密可進公開 repo）、交接檔更新
+**目前在分支 `feature/company-gpt-ui`（19 commits，未合併 main、未 push）。改版已全部實作＋審查完畢，剩使用者驗收與三個決定。**
+
+1. **起服務**（session 結束背景服務已停）：
+   - 後端：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`（Azure SQL 冷啟 30–60s，Hangfire 第一次連線逾時會自己重試，看到 Now listening 才算好）
+   - 前端：`npm run dev --prefix frontend` → 開 `https://localhost:5173/`
+2. **使用者驗收清單**（新版 ChatGPT 式 UI）：
+   - 新對話發問→網址變 /chat/{id}、側欄出現（帶相對時間）；切換／刪除／重新整理保留
+   - **登出→另一帳號同一分頁登入→不得看到前人對話**（最終審查抓到的 C1 回歸，最重要）
+   - Markdown 表格/清單渲染；貼 `<img src=x onerror=alert(1)>` 不得執行
+   - 手機尺寸：側欄抽屜、輸入、/documents
+   - Teams bot 多輪＋「新對話」指令＋Teams 對話出現在 web 側欄（OID 歸戶；要起 devtunnel：`& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe" host khub.jpe1`）
+3. **三個待決**：(a) 品牌色（暫定 #e4002b，`frontend/src/style.css` 一行替換）；(b) 已知未修項——既有對話發話後側欄排序/時間不即時更新（修法一行：useChat.ts 的 `sending` 提升為模組層，詳見 `.superpowers/sdd/2026-08-20-company-gpt-ui/progress.md` 的 parked ruling）；(c) 驗收過後合併 main
+4. 沿前未完的 Teams app sideload（上傳 `teams-app\knowledgehub-teams-app.zip`，走「上傳自訂應用程式」不用核准）與 teams-app/ commit——與本次改版無關，bot 多輪在 Emulator/既有管道就能驗
 
 
 > 歷史存檔（Phase A、Entra、內網直連）見 `docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md`。
