@@ -188,7 +188,7 @@ async function onDelete(id: string) {
       <li v-if="documents.length === 0" class="text-sm text-slate-400">尚無文件</li>
       <li v-for="doc in documents" :key="doc.id" class="rounded border border-slate-200 p-3 text-sm">
         <div class="flex items-center justify-between gap-2">
-          <span class="truncate font-medium text-slate-900" :title="doc.fileName">{{ doc.fileName }}</span>
+          <span class="min-w-0 flex-1 truncate font-medium text-slate-900" :title="doc.fileName">{{ doc.fileName }}</span>
           <button class="shrink-0 text-xs text-red-600 hover:underline" @click="onDelete(doc.id)">刪除</button>
         </div>
         <div class="mt-1 flex items-center gap-2">

@@ -15,9 +15,12 @@ async function onDelete(id: string) {
 
 <template>
   <div class="flex h-full flex-col bg-slate-50">
-    <div class="p-3">
+    <div class="space-y-3 p-3">
+      <p class="flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-900">
+        <span class="text-brand">●</span> KnowledgeHub
+      </p>
       <button
-        class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-left text-sm font-medium text-slate-900 hover:bg-slate-100"
+        class="w-full rounded-lg bg-brand px-3 py-2 text-left text-sm font-medium text-white hover:bg-brand-hover"
         @click="emit('new')"
       >
         ＋ 新對話

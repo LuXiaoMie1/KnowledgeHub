@@ -13,7 +13,7 @@ const expanded = ref(false)
     @click="expanded = !expanded"
   >
     <div class="flex items-center justify-between gap-2 text-slate-600">
-      <span class="truncate font-medium" :title="source.fileName">
+      <span class="min-w-0 flex-1 truncate font-medium" :title="source.fileName">
         {{ source.fileName }} 第{{ source.sequenceNumber }}段
       </span>
       <span class="shrink-0 text-slate-400">{{ expanded ? '收合' : '展開' }}</span>

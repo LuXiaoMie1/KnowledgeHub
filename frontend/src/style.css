@@ -1,2 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand: #e4002b; /* 暫定值：套用前自 QBurger 官網取正式色票，經使用者確認後替換 */
+  --color-brand-hover: #c50025;
+}

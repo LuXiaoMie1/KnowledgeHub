@@ -60,7 +60,7 @@ function autoGrow(e: Event) {
           </div>
           <!-- assistant：無泡泡直排版 -->
           <div v-else class="space-y-2">
-            <div v-if="m.content" class="text-sm text-slate-900">
+            <div v-if="m.content" class="overflow-x-auto text-sm text-slate-900">
               <MarkdownContent :content="m.content" />
               <span v-if="isStreaming(m, i)" class="animate-pulse">▍</span>
             </div>
@@ -82,7 +82,7 @@ function autoGrow(e: Event) {
           v-model="input"
           rows="1"
           placeholder="輸入問題…（Enter 送出，Shift+Enter 換行）"
-          class="max-h-[200px] flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          class="max-h-[200px] flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           :disabled="sending"
           @keydown="onKeydown"
           @input="autoGrow"
@@ -90,7 +90,7 @@ function autoGrow(e: Event) {
         <button
           type="submit"
           :disabled="sending || !input.trim()"
-          class="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+          class="rounded-xl bg-brand px-4 py-2 text-sm text-white hover:bg-brand-hover disabled:opacity-50"
         >
           送出
         </button>

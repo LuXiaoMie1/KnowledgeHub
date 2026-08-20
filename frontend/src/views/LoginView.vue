@@ -35,7 +35,7 @@ async function onEntraLogin() {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-slate-100">
+  <div class="flex min-h-screen items-center justify-center bg-slate-100 px-4">
     <form
       class="w-full max-w-sm space-y-4 rounded-lg bg-white p-8 shadow"
       @submit.prevent="onSubmit"
@@ -71,7 +71,7 @@ async function onEntraLogin() {
       <button
         type="submit"
         :disabled="loading"
-        class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+        class="w-full rounded bg-brand px-3 py-2 text-white hover:bg-brand-hover disabled:opacity-50"
       >
         {{ loading ? '登入中…' : '登入' }}
       </button>
