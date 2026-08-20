@@ -39,7 +39,7 @@ async function onDelete(id: string) {
           >Teams</span
         >
         <button
-          class="hidden shrink-0 text-slate-400 hover:text-red-600 group-hover:block"
+          class="block shrink-0 text-slate-400 hover:text-red-600 md:hidden md:group-hover:block"
           title="刪除對話"
           @click="onDelete(c.id)"
         >

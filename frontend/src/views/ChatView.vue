@@ -15,11 +15,16 @@ const drawerOpen = ref(false)
 onMounted(load)
 
 // 網址 → 對話：進 /chat/:id 載入該對話；進 /chat 清空
+// open() 回傳 false 代表這條 id 本身失敗（404／被刪／非本人，useChat 內部已 reset），
+// 網址不能停在壞 id，改回 /chat；回傳 true 則涵蓋成功套用與「已被更新的切換取代」兩種情況，不必處理。
 watch(
   () => route.params.id,
   async (id) => {
     if (typeof id === 'string' && id) {
-      if (id !== conversationId.value) await open(id)
+      if (id !== conversationId.value) {
+        const ok = await open(id)
+        if (!ok) router.replace('/chat')
+      }
     } else {
       reset()
     }

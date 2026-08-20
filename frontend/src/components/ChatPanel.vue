@@ -59,7 +59,7 @@ function autoGrow(e: Event) {
           </div>
           <!-- assistant：無泡泡直排版 -->
           <div v-else class="space-y-2">
-            <div v-if="m.content" class="text-sm text-slate-900">
+            <div v-if="m.content" class="whitespace-pre-wrap text-sm text-slate-900">
               {{ m.content }}<span v-if="isStreaming(m, i)" class="animate-pulse">▍</span>
             </div>
             <p v-else-if="isStreaming(m, i)" class="text-sm text-slate-400">思考中…</p>

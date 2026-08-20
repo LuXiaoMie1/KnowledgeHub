@@ -12,15 +12,25 @@ let controller: AbortController | null = null
 const messages = ref<ChatMessage[]>([])
 const conversationId = ref<string | null>(null)
 
+// 每次 open()/reset() 遞增的世代號：連續切換對話時，晚啟動、晚回來的 fetch 若已不是最新一次
+// 呼叫（generation 對不上），代表使用者已經切到別的對話，結果直接丟棄，不寫入 state。
+let generation = 0
+
 export function useChat() {
   const { authHeader, checkNoDepartment } = useAuth()
   const sending = ref(false)
 
-  /** 載入既有對話（側欄點選／網址帶 id 進入）。404（被刪或非本人）就回到空白新對話。 */
-  async function open(id: string): Promise<void> {
+  /**
+   * 載入既有對話（側欄點選／網址帶 id 進入）。
+   * 回傳 false＝這次呼叫本身失敗（404，被刪或非本人，已 reset 回空白新對話）；
+   * 回傳 true＝成功套用，或本次呼叫被更新的 open()/reset() 取代（呼叫端不必視為失敗處理）。
+   */
+  async function open(id: string): Promise<boolean> {
     cancel()
+    const gen = ++generation
     const res = await fetch(`/api/conversations/${id}`, { headers: authHeader() })
-    if (!res.ok) { reset(); return }
+    if (gen !== generation) return true // 已被更新的呼叫取代，結果作廢
+    if (!res.ok) { reset(); return false }
     const rows: { role: 'user' | 'assistant'; content: string; sourcesJson: string | null }[] =
       await res.json()
     conversationId.value = id
@@ -28,10 +38,12 @@ export function useChat() {
       role: r.role, content: r.content, error: null,
       sources: r.sourcesJson ? JSON.parse(r.sourcesJson) : [],
     }))
+    return true
   }
 
   function reset(): void {
     cancel()
+    generation++
     conversationId.value = null
     messages.value = []
   }
