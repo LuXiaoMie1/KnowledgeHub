@@ -9,6 +9,8 @@ public class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext> optio
     public DbSet<CompanyDocument> Documents => Set<CompanyDocument>();
     public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
     public DbSet<OutboxEmail> OutboxEmails => Set<OutboxEmail>();
+    public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +36,24 @@ public class KnowledgeHubDbContext(DbContextOptions<KnowledgeHubDbContext> optio
             e.Property(m => m.Subject).HasMaxLength(500);
             e.Property(m => m.Department).HasMaxLength(50);
             e.Property(m => m.RequestedBy).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<Conversation>(e =>
+        {
+            e.Property(c => c.UserKey).HasMaxLength(100);
+            e.Property(c => c.Channel).HasMaxLength(10);
+            e.Property(c => c.Title).HasMaxLength(100);
+            e.Property(c => c.TeamsConversationId).HasMaxLength(200);
+            e.HasIndex(c => new { c.UserKey, c.UpdatedAtUtc });   // 側欄清單查詢
+            e.HasIndex(c => c.TeamsConversationId);               // bot 接續查詢
+            e.HasMany(c => c.Messages).WithOne(m => m.Conversation)
+                .HasForeignKey(m => m.ConversationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ConversationMessage>(e =>
+        {
+            e.Property(m => m.Role).HasMaxLength(10);
+            e.HasIndex(m => new { m.ConversationId, m.CreatedAtUtc });
         });
     }
 }
