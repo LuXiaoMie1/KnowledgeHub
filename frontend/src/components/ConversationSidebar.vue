@@ -8,6 +8,21 @@ const emit = defineEmits<{ select: [id: string]; new: []; deleted: [id: string] 
 const { department, departments, logout } = useAuth()
 const { list, remove } = useConversations()
 
+const rtf = new Intl.RelativeTimeFormat('zh-TW', { numeric: 'auto' })
+
+/** 側欄相對時間（spec §6）：7 天內用「幾分鐘/小時/天前」，超過 7 天顯示日期。 */
+function formatRelative(updatedAtUtc: string): string {
+  const date = new Date(updatedAtUtc)
+  const diffMs = date.getTime() - Date.now()
+  const diffDay = diffMs / 86_400_000
+  if (Math.abs(diffDay) >= 7) return date.toLocaleDateString('zh-TW')
+  if (Math.abs(diffDay) >= 1) return rtf.format(Math.round(diffDay), 'day')
+  const diffHour = diffMs / 3_600_000
+  if (Math.abs(diffHour) >= 1) return rtf.format(Math.round(diffHour), 'hour')
+  const diffMin = diffMs / 60_000
+  return rtf.format(Math.round(diffMin), 'minute')
+}
+
 async function onDelete(id: string) {
   if (await remove(id)) emit('deleted', id)
 }
@@ -33,8 +48,9 @@ async function onDelete(id: string) {
         class="group flex items-center gap-1 rounded-lg px-2 py-2 text-sm hover:bg-slate-200"
         :class="c.id === activeId ? 'bg-slate-200 font-medium' : 'text-slate-700'"
       >
-        <button class="min-w-0 flex-1 truncate text-left" @click="emit('select', c.id)">
-          {{ c.title }}
+        <button class="min-w-0 flex-1 text-left" @click="emit('select', c.id)">
+          <span class="block truncate">{{ c.title }}</span>
+          <span class="block truncate text-xs text-slate-400">{{ formatRelative(c.updatedAtUtc) }}</span>
         </button>
         <span
           v-if="c.channel === 'teams'"

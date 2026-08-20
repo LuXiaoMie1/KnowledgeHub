@@ -8,7 +8,7 @@ import { useConversations } from '../composables/useConversations'
 
 const route = useRoute()
 const router = useRouter()
-const { conversationId, open, reset } = useChat()
+const { conversationId, sending, open, reset } = useChat()
 const { load } = useConversations()
 const drawerOpen = ref(false)
 
@@ -38,6 +38,14 @@ watch(conversationId, (id) => {
     router.replace(`/chat/${id}`)
     load()
   }
+})
+
+// 發話結束刷新側欄：spec §6 要求側欄的相對時間與排序（依 updatedAtUtc）要反映最新發話，
+// 在既有對話裡發話不會改變 conversationId，上面的 watcher 不會觸發，另外在這裡補刷新。
+// 用 sending 從 true→false 的邊界觸發，涵蓋新對話與既有對話兩種情況（新對話會多刷一次，
+// 可接受的代價換取邏輯單一入口）。
+watch(sending, (isSending, wasSending) => {
+  if (wasSending && !isSending) load()
 })
 
 function onNew() {
