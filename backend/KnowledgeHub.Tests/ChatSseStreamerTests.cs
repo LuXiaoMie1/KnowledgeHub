@@ -32,12 +32,13 @@ public class ChatSseStreamerTests
         }
     }
 
-    private static async Task<string> RunAsync(IChatService chat, RetrievalContext context)
+    private static async Task<((string Answer, string? SourcesJson)? Result, string Output)> RunAsync(
+        IChatService chat, RetrievalContext context)
     {
         using var stream = new MemoryStream();
-        await new ChatSseStreamer(chat, context, NullLogger<ChatSseStreamer>.Instance).StreamAsync(
+        var result = await new ChatSseStreamer(chat, context, NullLogger<ChatSseStreamer>.Instance).StreamAsync(
             stream, "問題", [], CancellationToken.None);
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return (result, Encoding.UTF8.GetString(stream.ToArray()));
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public class ChatSseStreamerTests
         context.Results.Add(new ChunkSearchResult(
             Guid.NewGuid(), Guid.NewGuid(), "sop.md", 2, "內容", 0.1));
 
-        var output = await RunAsync(new FakeChat(["你", "好"]), context);
+        var (_, output) = await RunAsync(new FakeChat(["你", "好"]), context);
 
         Assert.Contains("event: token\ndata: {\"text\":\"你\"}", output);
         Assert.Contains("event: sources\n", output);
@@ -61,7 +62,7 @@ public class ChatSseStreamerTests
     [Fact]
     public async Task 模型沒查庫_不發sources()
     {
-        var output = await RunAsync(new FakeChat(["嗨"]), new RetrievalContext());
+        var (_, output) = await RunAsync(new FakeChat(["嗨"]), new RetrievalContext());
         Assert.DoesNotContain("event: sources", output);
         Assert.Contains("event: done\n", output);
     }
@@ -69,11 +70,12 @@ public class ChatSseStreamerTests
     [Fact]
     public async Task 串流中途例外_發error後結束_不發done()
     {
-        var output = await RunAsync(
+        var (result, output) = await RunAsync(
             new FakeChat(["前半"], throwAfter: new InvalidOperationException("boom")), new RetrievalContext());
         Assert.Contains("event: token\ndata: {\"text\":\"前半\"}", output);
         Assert.Contains("event: error\n", output);
         Assert.DoesNotContain("event: done", output);
+        Assert.Null(result);
     }
 
     [Fact]
@@ -84,12 +86,61 @@ public class ChatSseStreamerTests
         var streamer = new ChatSseStreamer(
             new CancelingChat(cts), new RetrievalContext(), NullLogger<ChatSseStreamer>.Instance);
 
-        var ex = await Record.ExceptionAsync(() =>
-            streamer.StreamAsync(stream, "問題", [], cts.Token));
+        Exception? ex = null;
+        (string Answer, string? SourcesJson)? result = null;
+        try
+        {
+            result = await streamer.StreamAsync(stream, "問題", [], cts.Token);
+        }
+        catch (Exception caught)
+        {
+            ex = caught;
+        }
 
         Assert.Null(ex);
+        Assert.Null(result);
         var output = Encoding.UTF8.GetString(stream.ToArray());
         Assert.DoesNotContain("event: error", output);
         Assert.DoesNotContain("event: done", output);
+    }
+
+    [Fact]
+    public async Task 成功時回傳完整回答與來源json()
+    {
+        var context = new RetrievalContext();
+        context.Results.Add(new ChunkSearchResult(
+            Guid.NewGuid(), Guid.NewGuid(), "sop.md", 2, "內容", 0.1));
+
+        var (result, _) = await RunAsync(new FakeChat(["你", "好"]), context);
+
+        Assert.NotNull(result);
+        Assert.Equal("你好", result.Value.Answer);
+        Assert.Contains("fileName", result.Value.SourcesJson);
+    }
+
+    [Fact]
+    public async Task 失敗時回傳null_仍寫error事件()
+    {
+        var (result, output) = await RunAsync(
+            new FakeChat([], throwAfter: new InvalidOperationException("boom")), new RetrievalContext());
+
+        Assert.Null(result);
+        Assert.Contains("event: error\n", output);
+    }
+
+    [Fact]
+    public async Task conversation事件格式正確()
+    {
+        using var stream = new MemoryStream();
+        var streamer = new ChatSseStreamer(
+            new FakeChat([]), new RetrievalContext(), NullLogger<ChatSseStreamer>.Instance);
+        var id = Guid.NewGuid();
+
+        await streamer.WriteConversationEventAsync(stream, id, "標題", CancellationToken.None);
+
+        var text = Encoding.UTF8.GetString(stream.ToArray());
+        Assert.Contains("event: conversation", text);
+        Assert.Contains(id.ToString(), text);
+        Assert.Contains("標題", text);
     }
 }
