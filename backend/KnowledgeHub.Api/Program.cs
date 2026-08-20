@@ -172,7 +172,7 @@ builder.Services.AddSingleton<BotFrameworkAuthentication>(
 builder.Services.AddSingleton(sp =>
     new CloudAdapter(sp.GetRequiredService<BotFrameworkAuthentication>(), sp.GetRequiredService<ILogger<CloudAdapter>>()));
 builder.Services.AddTransient<IBot, KnowledgeHubBotHandler>();
-// bot 專用的 "bot" keyed 服務：與 web 端（/api/chat）完全獨立的一份 RetrievalPlugin／
+// bot 專用的 "bot" keyed 服務：與 web 端（/api/conversations/messages）完全獨立的一份 RetrievalPlugin／
 // Kernel／IChatService，理由見 KnowledgeHubBotHandler 類別註解——
 // 1) 部門範圍固定 AllDepartmentsScope（不經 ICurrentUser，匿名管道沒有 claim 可用）
 // 2) kernel 不掛 EmailPlugin（email: null，匿名管道不可觸發寄信）
