@@ -8,16 +8,36 @@ export interface ChatMessage { role: 'user' | 'assistant'; content: string; sour
 // 避免免費層 LLM 配額被已經沒人看的畫面繼續燒掉。
 let controller: AbortController | null = null
 
+// 模組層單例：目前開啟的對話（null＝新對話尚未建立）
+const messages = ref<ChatMessage[]>([])
+const conversationId = ref<string | null>(null)
+
 export function useChat() {
   const { authHeader, checkNoDepartment } = useAuth()
-  const messages = ref<ChatMessage[]>([])
   const sending = ref(false)
+
+  /** 載入既有對話（側欄點選／網址帶 id 進入）。404（被刪或非本人）就回到空白新對話。 */
+  async function open(id: string): Promise<void> {
+    cancel()
+    const res = await fetch(`/api/conversations/${id}`, { headers: authHeader() })
+    if (!res.ok) { reset(); return }
+    const rows: { role: 'user' | 'assistant'; content: string; sourcesJson: string | null }[] =
+      await res.json()
+    conversationId.value = id
+    messages.value = rows.map((r) => ({
+      role: r.role, content: r.content, error: null,
+      sources: r.sourcesJson ? JSON.parse(r.sourcesJson) : [],
+    }))
+  }
+
+  function reset(): void {
+    cancel()
+    conversationId.value = null
+    messages.value = []
+  }
 
   async function send(text: string): Promise<void> {
     sending.value = true
-    const history = messages.value
-      .filter((m) => !m.error)
-      .map((m) => ({ role: m.role, content: m.content }))
     messages.value.push({ role: 'user', content: text, sources: [], error: null })
     messages.value.push({ role: 'assistant', content: '', sources: [], error: null })
     // 從 messages.value 讀回剛推入的物件，取得的是 Vue 包過的 reactive proxy；
@@ -29,10 +49,10 @@ export function useChat() {
     controller = new AbortController()
 
     try {
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/conversations/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader() },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ conversationId: conversationId.value, message: text }),
         signal: controller.signal,
       })
       if (!res.ok) {
@@ -72,10 +92,11 @@ export function useChat() {
     const event = /^event: (.+)$/m.exec(block)?.[1]
     const data = /^data: (.+)$/m.exec(block)?.[1]
     if (!event || !data) return
-    if (event === 'token') reply.content += JSON.parse(data).text
+    if (event === 'conversation') conversationId.value = JSON.parse(data).id
+    else if (event === 'token') reply.content += JSON.parse(data).text
     else if (event === 'sources') reply.sources = JSON.parse(data)
     else if (event === 'error') reply.error = JSON.parse(data).message
   }
 
-  return { messages, sending, send, cancel }
+  return { messages, sending, conversationId, send, open, reset, cancel }
 }
