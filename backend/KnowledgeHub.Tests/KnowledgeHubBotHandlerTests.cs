@@ -43,6 +43,7 @@ public class KnowledgeHubBotHandlerTests
         public List<(string UserKey, string Channel, string Title, string? TeamsConversationId)> CreateCalls { get; } = [];
         public List<(Guid ConversationId, string Role, string Content)> AppendCalls { get; } = [];
         public List<Guid> EndCalls { get; } = [];
+        public Exception? AppendException;
 
         public Task<Conversation> CreateAsync(string userKey, string channel, string title,
             string? teamsConversationId = null, CancellationToken ct = default)
@@ -72,6 +73,7 @@ public class KnowledgeHubBotHandlerTests
             string? sourcesJson = null, CancellationToken ct = default)
         {
             AppendCalls.Add((conversationId, role, content));
+            if (AppendException is not null) throw AppendException;
             return Task.CompletedTask;
         }
 
@@ -248,5 +250,23 @@ public class KnowledgeHubBotHandlerTests
 
         Assert.Equal([existingId], repo.EndCalls);
         Assert.Equal(0, chat.CallCount);
+    }
+
+    [Fact]
+    public async Task 落庫失敗_不覆蓋已算出的回答()
+    {
+        var adapter = NewAdapter();
+        var repo = new FakeConversations { AppendException = new InvalidOperationException("db 落庫失敗（模擬）") };
+        var chat = new FakeChat(["這是正確答案"]);
+        var bot = new KnowledgeHubBotHandler(chat, new RetrievalContext(), NullLogger<KnowledgeHubBotHandler>.Instance, repo);
+
+        var ex = await Record.ExceptionAsync(() =>
+            new TestFlow(adapter, bot.OnTurnAsync)
+                .Send(NewTeamsActivity(adapter, "問題"))
+                .AssertReply(a => Assert.Equal(ActivityTypes.Typing, a.Type))
+                .AssertReply("這是正確答案")
+                .StartTestAsync());
+
+        Assert.Null(ex);
     }
 }

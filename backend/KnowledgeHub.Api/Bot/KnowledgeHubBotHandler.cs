@@ -1,5 +1,6 @@
 using System.Text;
 using KnowledgeHub.Core;
+using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Schema;
@@ -50,9 +51,11 @@ public class KnowledgeHubBotHandler(
         await turnContext.SendActivityAsync(new Activity { Type = ActivityTypes.Typing }, cancellationToken);
 
         string reply;
+        Conversation? conversation = null;
+        var rawAnswer = "";
         try
         {
-            var conversation = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken)
+            conversation = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken)
                 ?? await conversations.CreateAsync(userKey, ConversationChannels.Teams,
                     ConversationTitle.From(text), teamsConversationId, cancellationToken);
             var history = (await conversations.GetMessagesAsync(conversation.Id, cancellationToken))
@@ -63,16 +66,14 @@ public class KnowledgeHubBotHandler(
             var sb = new StringBuilder();
             await foreach (var token in chat.StreamAnswerAsync(text, history, cancellationToken))
                 sb.Append(token);
-            reply = sb.ToString();
+            rawAnswer = sb.ToString();
+            reply = rawAnswer;
 
             if (retrievalContext.Results.Count > 0)
             {
                 var sources = retrievalContext.Results.Select(r => r.FileName).Distinct();
                 reply += "\n\n來源：" + string.Join("、", sources);
             }
-
-            await conversations.AppendMessageAsync(conversation.Id, "user", text, ct: cancellationToken);
-            await conversations.AppendMessageAsync(conversation.Id, "assistant", sb.ToString(), ct: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -80,6 +81,22 @@ public class KnowledgeHubBotHandler(
             // （同 ChatSseStreamer 的錯誤處理原則，見該類別註解）。
             logger.LogError(ex, "Bot RAG 問答處理失敗");
             reply = "抱歉，處理您的問題時發生錯誤，請稍後再試。";
+            conversation = null; // LLM 沒有算出正確答案，不落庫（避免存進錯誤訊息或半套紀錄）
+        }
+
+        if (conversation is not null)
+        {
+            // 落庫與 LLM 呼叫分開處理：已經算出的正確回答不能被落庫失敗蓋掉——
+            // 落庫失敗只記 log，使用者仍拿到答案，事後由後端可觀測性追查孤兒訊息。
+            try
+            {
+                await conversations.AppendMessageAsync(conversation.Id, "user", text, ct: cancellationToken);
+                await conversations.AppendMessageAsync(conversation.Id, "assistant", rawAnswer, ct: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Bot 對話落庫失敗");
+            }
         }
 
         await turnContext.SendActivityAsync(MessageFactory.Text(reply), cancellationToken);
