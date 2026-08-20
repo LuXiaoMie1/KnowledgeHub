@@ -28,17 +28,25 @@ export function useChat() {
   async function open(id: string): Promise<boolean> {
     cancel()
     const gen = ++generation
-    const res = await fetch(`/api/conversations/${id}`, { headers: authHeader() })
-    if (gen !== generation) return true // 已被更新的呼叫取代，結果作廢
-    if (!res.ok) { reset(); return false }
-    const rows: { role: 'user' | 'assistant'; content: string; sourcesJson: string | null }[] =
-      await res.json()
-    conversationId.value = id
-    messages.value = rows.map((r) => ({
-      role: r.role, content: r.content, error: null,
-      sources: r.sourcesJson ? JSON.parse(r.sourcesJson) : [],
-    }))
-    return true
+    try {
+      const res = await fetch(`/api/conversations/${id}`, { headers: authHeader() })
+      if (gen !== generation) return true // 已被更新的呼叫取代，結果作廢
+      if (!res.ok) { reset(); return false }
+      const rows: { role: 'user' | 'assistant'; content: string; sourcesJson: string | null }[] =
+        await res.json()
+      if (gen !== generation) return true // 已被更新的呼叫取代，結果作廢
+      conversationId.value = id
+      messages.value = rows.map((r) => ({
+        role: r.role, content: r.content, error: null,
+        sources: r.sourcesJson ? JSON.parse(r.sourcesJson) : [],
+      }))
+      return true
+    } catch {
+      // fetch 被拒絕（斷線）或 JSON 解析失敗：視同這次呼叫失敗，reset 回空白新對話，
+      // 讓呼叫端（ChatView 的網址 watcher）走既有的「回退到 /chat」路徑。
+      reset()
+      return false
+    }
   }
 
   function reset(): void {

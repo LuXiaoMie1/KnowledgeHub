@@ -22,5 +22,10 @@ export function useConversations() {
     return res.ok
   }
 
-  return { list, load, remove }
+  /** 登出時清空側欄清單，避免下一位登入者在清單重新載入前看到前一位使用者的對話標題。 */
+  function clear(): void {
+    list.value = []
+  }
+
+  return { list, load, remove, clear }
 }
