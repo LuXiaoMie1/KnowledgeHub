@@ -10,8 +10,9 @@ namespace KnowledgeHub.Api.Bot;
 
 /// <summary>
 /// KnowledgeHub bot 的對話邏輯進入點（掛在 /api/messages，見 Program.cs）。
-/// 單輪問答：不維護對話歷史，每則訊息都是獨立的一次 RAG 查詢（Teams SSO／多輪對話
-/// 是後續工作）。
+/// 多輪問答：對話歷史與 web 端共用同一套 <see cref="IConversationRepository"/> 落庫——
+/// 同一個 Teams 對話串（<c>Activity.Conversation.Id</c>）會接續尚未結束的對話；使用者輸入
+/// 「新對話」或 <c>/new</c> 會把目前對話蓋上結束章，下一句話開新對話。
 ///
 /// 安全前提（不可妥協）：bot 走 Bot Framework 匿名/自家驗證，沒有使用者身分與部門
 /// claim。因此這裡注入的 <see cref="IChatService"/> 一律用 "bot" 這個 keyed 服務——
@@ -24,19 +25,43 @@ namespace KnowledgeHub.Api.Bot;
 public class KnowledgeHubBotHandler(
     [FromKeyedServices("bot")] IChatService chat,
     RetrievalContext retrievalContext,
-    ILogger<KnowledgeHubBotHandler> logger) : ActivityHandler
+    ILogger<KnowledgeHubBotHandler> logger,
+    IConversationRepository conversations) : ActivityHandler
 {
+    private const int MaxHistoryTurns = 10;
+
     protected override async Task OnMessageActivityAsync(
         ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
     {
+        var text = turnContext.Activity.Text?.Trim() ?? "";
+        var teamsConversationId = turnContext.Activity.Conversation.Id;
+        // Teams 的 AadObjectId 即 Entra oid，與 web 端 UserKey 同源（歸戶互通）；非 Teams 管道（Emulator）退用 From.Id
+        var userKey = turnContext.Activity.From?.AadObjectId ?? turnContext.Activity.From?.Id ?? "unknown";
+
+        if (text is "新對話" or "/new")
+        {
+            var active = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken);
+            if (active is not null) await conversations.EndAsync(active.Id, cancellationToken);
+            await turnContext.SendActivityAsync(
+                MessageFactory.Text("好的，已為您開啟新對話，請直接提問。"), cancellationToken);
+            return;
+        }
+
         await turnContext.SendActivityAsync(new Activity { Type = ActivityTypes.Typing }, cancellationToken);
 
         string reply;
         try
         {
+            var conversation = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken)
+                ?? await conversations.CreateAsync(userKey, ConversationChannels.Teams,
+                    ConversationTitle.From(text), teamsConversationId, cancellationToken);
+            var history = (await conversations.GetMessagesAsync(conversation.Id, cancellationToken))
+                .TakeLast(MaxHistoryTurns)
+                .Select(m => new ChatTurn(m.Role, m.Content))
+                .ToList();
+
             var sb = new StringBuilder();
-            await foreach (var token in chat.StreamAnswerAsync(
-                turnContext.Activity.Text, history: [], cancellationToken))
+            await foreach (var token in chat.StreamAnswerAsync(text, history, cancellationToken))
                 sb.Append(token);
             reply = sb.ToString();
 
@@ -45,6 +70,9 @@ public class KnowledgeHubBotHandler(
                 var sources = retrievalContext.Results.Select(r => r.FileName).Distinct();
                 reply += "\n\n來源：" + string.Join("、", sources);
             }
+
+            await conversations.AppendMessageAsync(conversation.Id, "user", text, ct: cancellationToken);
+            await conversations.AppendMessageAsync(conversation.Id, "assistant", sb.ToString(), ct: cancellationToken);
         }
         catch (Exception ex)
         {
