@@ -104,6 +104,7 @@ builder.Services.AddScoped<IDepartmentScope, CurrentUserDepartmentScope>();
 builder.Services.AddScoped<IChunkRepository, ChunkRepository>();
 builder.Services.AddScoped<IOutboxEmailRepository, OutboxEmailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddSingleton(new UploadOptions(
     builder.Configuration["Upload:Root"] ?? "uploads"));
 builder.Services.AddHangfire(c => c.UseSqlServerStorage(
