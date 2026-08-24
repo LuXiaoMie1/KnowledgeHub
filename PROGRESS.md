@@ -1,4 +1,11 @@
-# KnowledgeHub 進度（2026-08-20 存檔 — 公司 GPT 改版完工待驗收，在 feature/company-gpt-ui）
+# KnowledgeHub 進度（2026-08-24 存檔 — 公司 GPT 改版完工待驗收，在 feature/company-gpt-ui）
+
+## 2026-08-24 本日進展（驗收開場即卡登入，已解，尚未實際驗收）
+
+- ✓ 起服務驗收：後端＋前端都起得來（Azure SQL 冷啟 Hangfire 逾時重試屬正常，等到 Now listening 即可）
+- ✓ 卡點與解法：本機 `https://localhost:5173` 登入炸 **AADSTS50011**——Entra SPA 登記的 localhost 是 http 版，前端 8/12 已改 https。使用者已在 Portal 補加 `https://localhost:5173` 與 `…/redirect.html` 兩條（詳見 docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md 的 SPA 節）
+- ⚠ 注意：瀏覽器手打 `localhost:5173` 會走 http → ERR_EMPTY_RESPONSE，要完整輸入 `https://localhost:5173/`（自簽憑證警告點進階→繼續）
+- → **登入尚未實測**（補完 URI 就下班了）；驗收清單一項都還沒跑——下次開場：起服務 → https 登入 → 跑下方驗收清單
 
 ## 下次開場（接續點）
 
