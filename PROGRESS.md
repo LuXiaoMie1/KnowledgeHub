@@ -5,7 +5,8 @@
 - ✓ `feature/company-gpt-ui` 已 push 到 origin（19 commits；teams-app/ 仍 untracked 未 commit，照計畫等 Teams 驗完才 commit）
 - ✗ **卡點：Azure SQL 免費層當月額度用完，DB 被暫停到月底**（錯誤碼 42119，Hangfire 連線即炸）。前端與 devtunnel 起得來，後端無 DB 不可用，三個服務已收掉
 - → **9/1 00:00 UTC（台灣 9/1 早上 8 點）額度自動重置**，使用者選擇等待、不付費解鎖。明天開場：起三件組 → https 登入實測（8/24 補的 redirect URI 尚未驗過）→ 跑下方驗收清單 → Teams sideload（步驟見「下次開場」第 4 點與 Bot 計畫 8b）
-- 備忘：Teams bot 架構已向使用者說明——邏輯全在本機（Teams/Azure Bot 只轉發、經 devtunnel 進本機 5106），本機服務停＝bot 停；sideload 只有自己看得到
+- ✓ **Teams sideload 完成**（8b 辦結）：使用者已上傳 zip，KnowledgeHub bot 出現在 Teams 對話清單。尚未發話實測（後端沒起＋DB 暫停），明天服務起來後測：發問→多輪→「新對話」→web 側欄 OID 歸戶
+- 備忘：Teams bot 架構已向使用者說明——邏輯全在本機（Teams/Azure Bot 只轉發、經 devtunnel 進本機 5106），本機服務停＝bot 停。同事存取：測試階段傳 zip 給同事各自 sideload（前提：sideload 政策對他們也開放）；正式發佈走組織應用程式目錄＝等後端離開開發機再說（tunnel 剩約 24 天）
 
 ## 2026-08-24 進展（驗收開場即卡登入，已解，尚未實際驗收）
 
@@ -50,7 +51,7 @@
 - ✓ 6. 四鍵已入 user-secrets（AppType=SingleTenant/AppId/Password/TenantId），list 確認存在
 - ✓ 7. manifest（真實 appId 已填）＋icons＋zip：`teams-app/knowledgehub-teams-app.zip`
 - ✓ 8a. 後端＋tunnel host 已起；驗證：本機 POST /api/messages 未簽章→401（Bot 驗證生效）；經 tunnel 繞 DNS 直打（4.190.51.35）→401（外部可達）
-- → 8b. **使用者上傳 zip**（Teams→應用程式→管理您的應用程式→上傳應用程式→選 `teams-app\knowledgehub-teams-app.zip`）→ 對 bot 發問實測
+- ✓ 8b. 使用者上傳 zip 完成（2026-08-31）；→ 對 bot 發問實測（等 9/1 DB 恢復＋服務起來）
 - □ 9. 收尾：交接檔更新、commit（teams-app/ 進 repo；secret 不進。注意 manifest 含 appId——公開 repo 可接受，appId 非機密）
 
 ## 環境事實
