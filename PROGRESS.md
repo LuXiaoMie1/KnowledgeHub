@@ -1,6 +1,13 @@
-# KnowledgeHub 進度（2026-08-24 存檔 — 公司 GPT 改版完工待驗收，在 feature/company-gpt-ui）
+# KnowledgeHub 進度（2026-08-31 存檔 — 分支已 push；Azure SQL 免費額度月底用罄，驗收延至 9/1）
 
-## 2026-08-24 本日進展（驗收開場即卡登入，已解，尚未實際驗收）
+## 2026-08-31 本日進展（驗收被 DB 暫停擋下，一項都還沒跑）
+
+- ✓ `feature/company-gpt-ui` 已 push 到 origin（19 commits；teams-app/ 仍 untracked 未 commit，照計畫等 Teams 驗完才 commit）
+- ✗ **卡點：Azure SQL 免費層當月額度用完，DB 被暫停到月底**（錯誤碼 42119，Hangfire 連線即炸）。前端與 devtunnel 起得來，後端無 DB 不可用，三個服務已收掉
+- → **9/1 00:00 UTC（台灣 9/1 早上 8 點）額度自動重置**，使用者選擇等待、不付費解鎖。明天開場：起三件組 → https 登入實測（8/24 補的 redirect URI 尚未驗過）→ 跑下方驗收清單 → Teams sideload（步驟見「下次開場」第 4 點與 Bot 計畫 8b）
+- 備忘：Teams bot 架構已向使用者說明——邏輯全在本機（Teams/Azure Bot 只轉發、經 devtunnel 進本機 5106），本機服務停＝bot 停；sideload 只有自己看得到
+
+## 2026-08-24 進展（驗收開場即卡登入，已解，尚未實際驗收）
 
 - ✓ 起服務驗收：後端＋前端都起得來（Azure SQL 冷啟 Hangfire 逾時重試屬正常，等到 Now listening 即可）
 - ✓ 卡點與解法：本機 `https://localhost:5173` 登入炸 **AADSTS50011**——Entra SPA 登記的 localhost 是 http 版，前端 8/12 已改 https。使用者已在 Portal 補加 `https://localhost:5173` 與 `…/redirect.html` 兩條（詳見 docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md 的 SPA 節）
