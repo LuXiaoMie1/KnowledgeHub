@@ -23,4 +23,9 @@ public class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
     public string Username =>
         accessor.HttpContext?.User.FindFirst("sub")?.Value
         ?? throw new InvalidOperationException("缺少 sub claim");
+
+    public string UserKey =>
+        accessor.HttpContext?.User.FindFirst("oid")?.Value
+        ?? accessor.HttpContext?.User.FindFirst("sub")?.Value
+        ?? throw new InvalidOperationException("缺少 oid/sub claim");
 }

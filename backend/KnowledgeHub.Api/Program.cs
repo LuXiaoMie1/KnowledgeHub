@@ -104,6 +104,7 @@ builder.Services.AddScoped<IDepartmentScope, CurrentUserDepartmentScope>();
 builder.Services.AddScoped<IChunkRepository, ChunkRepository>();
 builder.Services.AddScoped<IOutboxEmailRepository, OutboxEmailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
 builder.Services.AddSingleton(new UploadOptions(
     builder.Configuration["Upload:Root"] ?? "uploads"));
 builder.Services.AddHangfire(c => c.UseSqlServerStorage(
@@ -113,6 +114,7 @@ builder.Services.AddScoped<IDocumentJobQueue, HangfireDocumentJobQueue>();
 builder.Services.AddScoped<DocumentProcessingJob>();
 builder.Services.AddScoped<IDocumentTextExtractor, PdfTextExtractor>();
 builder.Services.AddScoped<IDocumentTextExtractor, MarkdownTextExtractor>();
+builder.Services.AddScoped<IDocumentTextExtractor, DocxTextExtractor>();
 builder.Services.AddScoped<RetrievalContext>();
 // AI provider：Vertex AI（服務帳戶 OAuth），不再用 AI Studio 的 API key。
 var vertexProjectId = builder.Configuration["Vertex:ProjectId"]
@@ -171,7 +173,7 @@ builder.Services.AddSingleton<BotFrameworkAuthentication>(
 builder.Services.AddSingleton(sp =>
     new CloudAdapter(sp.GetRequiredService<BotFrameworkAuthentication>(), sp.GetRequiredService<ILogger<CloudAdapter>>()));
 builder.Services.AddTransient<IBot, KnowledgeHubBotHandler>();
-// bot 專用的 "bot" keyed 服務：與 web 端（/api/chat）完全獨立的一份 RetrievalPlugin／
+// bot 專用的 "bot" keyed 服務：與 web 端（/api/conversations/messages）完全獨立的一份 RetrievalPlugin／
 // Kernel／IChatService，理由見 KnowledgeHubBotHandler 類別註解——
 // 1) 部門範圍固定 AllDepartmentsScope（不經 ICurrentUser，匿名管道沒有 claim 可用）
 // 2) kernel 不掛 EmailPlugin（email: null，匿名管道不可觸發寄信）

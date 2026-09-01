@@ -1,53 +1,45 @@
-# KnowledgeHub 進度（2026-08-18 存檔 — Teams 整合只剩「上傳 app」最後一步）
+# KnowledgeHub 進度（2026-09-01 — 真實文件大量匯入完成、Teams bot 實測通過、驗收大半辦結）
 
-## 下次開場（接續點）
+## 2026-09-01 本日進展
 
-1. **重啟兩件**（session 結束背景服務已停）：
-   - 後端：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`（等 Azure SQL 冷啟動 30–60s，看到 Now listening 才算好）
-   - tunnel：`& "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe" host khub.jpe1`
-   - （前端 vite 與 Teams bot 無關，測 bot 不用起）
-2. **上傳 Teams app**：使用者 8/18 第一次上傳誤走「提交組織核准」流程（擱置中，可按垃圾桶刪）。正路＝Teams→應用程式→管理您的應用程式→上傳應用程式→選「**上傳自訂應用程式**」（不用核准）→ `teams-app\knowledgehub-teams-app.zip`。若沒有這選項＝sideload 政策沒套用，先登出重登 Teams，再不行查管理中心政策指派（KnowledgeHub-Dev-Sideload）
-3. 上傳成功後對 bot 發問實測（單輪、鎖 ALL 文件）。若 bot 沒回，看後端 log：401「No Authorization header」以外的錯才是真問題
-4. 通了之後收尾：teams-app/ commit 進 repo（appId 非機密可進公開 repo）、交接檔更新
+- ✓ **DB 復活**（免費額度 9/1 重置），三件組全數起妥
+- ✓ **Teams bot 端到端通了**：卡點是 AADSTS7000229（app reg 缺 service principal），`az ad sp create --id 2629b8d6-…` 補上即通。發問／多輪／「新對話」皆實測正常。teams-app/ 已 commit（`209e596`），Bot 計畫第 9 步辦結
+- ✓ **真實文件大量匯入**：一階 62 份、二階 105 份（補傳 3 份 AD-B 後齊）、四階表單改用「表單總目錄」方案。知識庫從 74 份 → 210+ 份，全 Completed
+  - 刪 1 份內容重複（PD-A1-001 帶「(1)」後綴的重複下載；比對時注意**文管系統每頁蓋下載日期浮水印**，同文件不同天下載內容比對會不一致，只有浮水印日期差異即可視為重複）
+  - □ 三階流程圖缺 7 份未補傳：PD-C-001/002、QA-C-001/002/003、TD-C-024/025
+  - □ 表單總目錄（`docs-private\QBurger表單總目錄.md`，137/138 筆——121-135 頁最後一筆截圖被截掉待補）與營運循環總覽（`docs-private\QBurger營運循環總覽.md`，「九大」數字待使用者確認）等使用者上傳
+- ✓ **新功能：.docx 上傳支援**（`f11a000`）：DocxTextExtractor（OpenXml）＋前後端白名單，測試 20/20 綠
+- ✓ **兩個 bug 修掉**：側欄發話後不刷新（`2ca7e9a`，sending 提升模組層）；側欄時間差 8 小時（`18933eb`，UTC 字串無 Z 被當本地時間）
+- ✓ **RAG 品質診斷方法建立**：後端 log 有每次檢索的距離分數（grep「知識庫檢索」）。實例：「9大循環」全部 chunk 距離 0.39-0.41 被 0.38 門檻擋光→回「找不到」；彙總型問題靠「總覽文件」解，不動門檻
+- ✓ 同事內網測試完成（`https://qbn034.qburger.ent.com.tw:5173`）
 
+## 驗收清單剩餘項（下次開場先做）
 
-> 歷史存檔（Phase A、Entra、內網直連）見 `docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md`。
+- □ **C1 最重要**：登出→另一帳號同一分頁登入→不得看到前人對話
+- □ Teams 對話出現在 web 側欄（OID 歸戶）——bot 已通，回 web 看側欄即可驗
+- □ Markdown XSS：貼 `<img src=x onerror=alert(1)>` 不得執行
+- □ 手機尺寸：側欄抽屜、輸入、/documents
+- ✓ https 登入（今日實測 OK）、新對話→/chat/{id}→側欄（同事測試已覆蓋）
 
-## 前置狀態（今日開場確認）
+## 三個待決（合併前）
 
-- ✓ Entra 4 條 SPA redirect URI 使用者已加好並實測（同事內網直連登入 OK、群組→部門 claim 正確）
-- ✓ Teams 自訂應用程式上傳政策生效（用戶端已出現「上傳應用程式」按鈕，截圖確認）
-- main `7d6894d`，工作樹乾淨
+1. 品牌色確認（暫定 #e4002b，`frontend/src/style.css` 一行替換）
+2. ~~側欄排序/時間不即時更新~~（9/1 已修，`2ca7e9a`）
+3. 驗收過後合併 main（分支 `feature/company-gpt-ui`，現 22 commits 已 push 部分——9/1 新增 4 commits 未 push）
 
-## Teams/Azure Bot 整合計畫
+## 待辦（非阻塞）
 
-- ✓ 1. Azure CLI 2.89.1 已裝（winget）
-- ✓ 2. az login 完成（device code；訂閱 bcdb62f8-…、租戶 9713fce3-…）
-- ✓ 3. tunnel 5106 埠已開（使用者執行；`https://25630g9l-5106.jpe1.devtunnels.ms`）
-- ✓ 4a. App registration「KnowledgeHub-Bot」建好：appId `2629b8d6-a548-4c0c-9eb0-a1971cc16494`（single-tenant）
-- ✓ 4b. client secret 已由使用者發（bot-dev，效期 1 年）
-- ✓ 5. Azure Bot F0 `knowledgehub-dev-bot` 建好（rg-knowledgehub-dev），endpoint 指 tunnel 5106 `/api/messages`，Teams channel 已啟用
-- ✓ 6. 四鍵已入 user-secrets（AppType=SingleTenant/AppId/Password/TenantId），list 確認存在
-- ✓ 7. manifest（真實 appId 已填）＋icons＋zip：`teams-app/knowledgehub-teams-app.zip`
-- ✓ 8a. 後端＋tunnel host 已起；驗證：本機 POST /api/messages 未簽章→401（Bot 驗證生效）；經 tunnel 繞 DNS 直打（4.190.51.35）→401（外部可達）
-- → 8b. **使用者上傳 zip**（Teams→應用程式→管理您的應用程式→上傳應用程式→選 `teams-app\knowledgehub-teams-app.zip`）→ 對 bot 發問實測
-- □ 9. 收尾：交接檔更新、commit（teams-app/ 進 repo；secret 不進。注意 manifest 含 appId——公開 repo 可接受，appId 非機密）
+- 「回答附表單下載連結」功能——使用者問過，評估過先用表單總目錄指路頂替，真要做需下載端點＋權限
+- RAG 後續（8/20 評估報告優先序）：檢索端去重保險（來源洗版）→ 索引端清樣板雜訊（**含文管浮水印行**）→ 混合檢索 → rerank
+- Excel 表單（.xls/.xlsx）與 .doc 舊格式不支援，維持轉 PDF 或跳過
+- tunnel `khub.jpe1` 效期剩約 23 天；正式部署（離開開發機）議題未動
 
 ## 環境事實
 
-- tunnel `khub.jpe1`：現有 5173(https) 一埠，Anonymous connect，效期還有 ~24 天
+- 三件組：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`（https 7152／http 5106）、`npm run dev --prefix frontend`（https 5173）、`devtunnel host khub.jpe1`（5106+5173）
 - devtunnel.exe：`$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Microsoft.devtunnel_Microsoft.Winget.Source_8wekyb3d8bbwe\devtunnel.exe`
-- 後端埠：https 7152 / http 5106；bot 匿名模式現況＝Emulator 用，填 MicrosoftAppId 後改走 Bot Framework 簽章驗證
-- 服務重啟三件組：`dotnet run --project backend/KnowledgeHub.Api --launch-profile https`、`npm run dev --prefix frontend`、`devtunnel host khub.jpe1`
+- Azure SQL 免費層額度按月，8 月曾用罄整庫暫停到月底——本月留意用量
+- 同事測試網址：`https://qbn034.qburger.ent.com.tw:5173/`（完整含 https、自簽憑證按進階繼續）
+- DB 唯讀查詢：連線字串在 user-secrets（`dotnet user-secrets list --project backend/KnowledgeHub.Api`），表名 `Documents`／`DocumentChunks`／`Conversations`
 
-## 2026-08-20 RAG 檢索品質（實測評估＋前兩項改善已做）
-
-- ✓ 實測評估：16 組查詢打真實語料（87 份文件），報告在 `docs-private\KnowledgeHub-RAG檢索評估-2026-08-20.md`。結論：向量檢索本身夠好（12/12 命中 top-2）、rerank/query rewriting 暫不需要；優先做門檻與去重
-- ✓ 相似度門檻：`Retrieval:MaxDistance = 0.38`（appsettings.json），RetrievalPlugin 過濾超標 chunk＋距離寫 log 供調參，web/bot 兩管道皆接上；單元測試 91 綠（新增 3 條門檻測試）。**未 commit**
-- ✓ DB 去重：刪 12 份 IT 重複文件（逐 chunk 內容比對一致才刪，留最新）＋1 份 Failed 殘檔；清理後 74 份文件、1,024 chunks、重複歸零
-- □ 後續（按評估報告優先序）：檢索端去重保險 → 索引端清樣板雜訊/過短 chunk → 混合檢索（救代碼精確查詢）→ 視情況 rerank
-
-## 小債（沿前）
-
-- bot 多輪對話歷史、整合測試隔離資料、feature/bot-rag＋三條已合併舊分支未清
-- ~~QB-PD-A1-001 在 ALL 重複兩份~~（2026-08-20 去重掃描已無此重複，了結）
+> 歷史存檔：Entra／內網直連見 `docs-private\KnowledgeHub-entra設定紀錄-2026-08-10.md`；RAG 評估見 `docs-private\KnowledgeHub-RAG檢索評估-2026-08-20.md`；改版裁決見 `.superpowers/sdd/2026-08-20-company-gpt-ui/progress.md`

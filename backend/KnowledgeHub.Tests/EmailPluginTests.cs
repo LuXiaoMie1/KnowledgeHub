@@ -19,6 +19,7 @@ public class EmailPluginTests
         public string Department => "IT";
         public IReadOnlyList<string> Departments => ["IT"];
         public string Username => "it-user";
+        public string UserKey => "test-user";
     }
 
     [Fact]

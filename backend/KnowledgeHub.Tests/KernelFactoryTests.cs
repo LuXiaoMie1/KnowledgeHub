@@ -38,6 +38,7 @@ public class KernelFactoryTests
         public string Department => "IT";
         public IReadOnlyList<string> Departments => ["IT"];
         public string Username => "it-user";
+        public string UserKey => "test-user";
     }
 
     private static RetrievalPlugin NewRetrievalPlugin() =>

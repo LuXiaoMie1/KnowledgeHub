@@ -1,10 +1,23 @@
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useAuth } from './composables/useAuth'
+import { useChat } from './composables/useChat'
+import { useConversations } from './composables/useConversations'
 import LoginView from './views/LoginView.vue'
-import DocumentPanel from './components/DocumentPanel.vue'
-import ChatPanel from './components/ChatPanel.vue'
 
-const { token, department, departments, noDepartmentMessage, logout } = useAuth()
+const { token, noDepartmentMessage, logout } = useAuth()
+const { reset: resetChat } = useChat()
+const { clear: clearConversations } = useConversations()
+
+// 登出（token 變 falsy）時清空模組層的對話狀態與側欄清單，避免下一位在同分頁登入的
+// 使用者看到前一位使用者殘留的對話內容（機密性回歸：useChat/useConversations 是模組層
+// 單例，useAuth 的登出原本只清 token，不會自動清掉這兩份狀態）。
+watch(token, (t) => {
+  if (!t) {
+    resetChat()
+    clearConversations()
+  }
+})
 </script>
 
 <template>
@@ -16,28 +29,5 @@ const { token, department, departments, noDepartmentMessage, logout } = useAuth(
     <p class="max-w-md text-slate-700">{{ noDepartmentMessage }}</p>
     <button class="rounded bg-slate-900 px-4 py-2 text-white" @click="logout">返回登入頁</button>
   </div>
-  <div v-else class="flex h-screen flex-col">
-    <header class="flex items-center justify-between border-b border-slate-200 px-6 py-3">
-      <h1 class="text-lg font-semibold text-slate-900">KnowledgeHub</h1>
-      <div class="flex items-center gap-3">
-        <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
-          {{ departments.length > 0 ? departments.join('、') : department }}
-        </span>
-        <button
-          class="rounded border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
-          @click="logout"
-        >
-          登出
-        </button>
-      </div>
-    </header>
-    <main class="flex flex-1 overflow-hidden">
-      <aside class="w-80 shrink-0 border-r border-slate-200 p-4">
-        <DocumentPanel />
-      </aside>
-      <section class="flex-1 overflow-hidden">
-        <ChatPanel />
-      </section>
-    </main>
-  </div>
+  <router-view v-else />
 </template>

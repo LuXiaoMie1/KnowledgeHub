@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json;
 using KnowledgeHub.Core;
+using KnowledgeHub.Core.Entities;
 using KnowledgeHub.Core.Interfaces;
 using Microsoft.Bot.Builder;
 using Microsoft.Bot.Schema;
@@ -10,8 +12,9 @@ namespace KnowledgeHub.Api.Bot;
 
 /// <summary>
 /// KnowledgeHub bot 的對話邏輯進入點（掛在 /api/messages，見 Program.cs）。
-/// 單輪問答：不維護對話歷史，每則訊息都是獨立的一次 RAG 查詢（Teams SSO／多輪對話
-/// 是後續工作）。
+/// 多輪問答：對話歷史與 web 端共用同一套 <see cref="IConversationRepository"/> 落庫——
+/// 同一個 Teams 對話串（<c>Activity.Conversation.Id</c>）會接續尚未結束的對話；使用者輸入
+/// 「新對話」或 <c>/new</c> 會把目前對話蓋上結束章，下一句話開新對話。
 ///
 /// 安全前提（不可妥協）：bot 走 Bot Framework 匿名/自家驗證，沒有使用者身分與部門
 /// claim。因此這裡注入的 <see cref="IChatService"/> 一律用 "bot" 這個 keyed 服務——
@@ -19,31 +22,66 @@ namespace KnowledgeHub.Api.Bot;
 /// EmailPlugin（匿名管道不可觸發寄信），且 retrieval plugin 的部門範圍固定是
 /// <see cref="AllDepartmentsScope"/>（只查全公司共用文件），不會、也不能查到部門限定
 /// 文件。不要把這裡改成注入不帶 key 的 IChatService／Kernel——那一份是 web 端
-/// （/api/chat）專用，掛了 EmailPlugin 且部門範圍取自 ICurrentUser，兩者不可互換。
+/// （/api/conversations/messages）專用，掛了 EmailPlugin 且部門範圍取自 ICurrentUser，兩者不可互換。
 /// </summary>
 public class KnowledgeHubBotHandler(
     [FromKeyedServices("bot")] IChatService chat,
     RetrievalContext retrievalContext,
-    ILogger<KnowledgeHubBotHandler> logger) : ActivityHandler
+    ILogger<KnowledgeHubBotHandler> logger,
+    IConversationRepository conversations) : ActivityHandler
 {
+    private const int MaxHistoryTurns = 10;
+
+    // 與 ChatSseStreamer 的 sources 事件同形（camelCase＋寬鬆轉義），讓 web 端重開 Teams
+    // 落庫的對話時，SourcesJson 能直接被前端既有的 JSON.parse(sourcesJson) 解析出來源卡片。
+    private static readonly JsonSerializerOptions JsonOpts =
+        new(JsonSerializerDefaults.Web) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     protected override async Task OnMessageActivityAsync(
         ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
     {
+        var text = turnContext.Activity.Text?.Trim() ?? "";
+        var teamsConversationId = turnContext.Activity.Conversation.Id;
+        // Teams 的 AadObjectId 即 Entra oid，與 web 端 UserKey 同源（歸戶互通）；非 Teams 管道（Emulator）退用 From.Id
+        var userKey = turnContext.Activity.From?.AadObjectId ?? turnContext.Activity.From?.Id ?? "unknown";
+
+        if (text is "新對話" or "/new")
+        {
+            var active = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken);
+            if (active is not null) await conversations.EndAsync(active.Id, cancellationToken);
+            await turnContext.SendActivityAsync(
+                MessageFactory.Text("好的，已為您開啟新對話，請直接提問。"), cancellationToken);
+            return;
+        }
+
         await turnContext.SendActivityAsync(new Activity { Type = ActivityTypes.Typing }, cancellationToken);
 
         string reply;
+        Conversation? conversation = null;
+        var rawAnswer = "";
+        string? sourcesJson = null;
         try
         {
+            conversation = await conversations.FindActiveTeamsAsync(teamsConversationId, cancellationToken)
+                ?? await conversations.CreateAsync(userKey, ConversationChannels.Teams,
+                    ConversationTitle.From(text), teamsConversationId, cancellationToken);
+            var history = (await conversations.GetMessagesAsync(conversation.Id, cancellationToken))
+                .TakeLast(MaxHistoryTurns)
+                .Select(m => new ChatTurn(m.Role, m.Content))
+                .ToList();
+
             var sb = new StringBuilder();
-            await foreach (var token in chat.StreamAnswerAsync(
-                turnContext.Activity.Text, history: [], cancellationToken))
+            await foreach (var token in chat.StreamAnswerAsync(text, history, cancellationToken))
                 sb.Append(token);
-            reply = sb.ToString();
+            rawAnswer = sb.ToString();
+            reply = rawAnswer;
 
             if (retrievalContext.Results.Count > 0)
             {
                 var sources = retrievalContext.Results.Select(r => r.FileName).Distinct();
                 reply += "\n\n來源：" + string.Join("、", sources);
+                sourcesJson = JsonSerializer.Serialize(retrievalContext.Results.Select(r => new
+                    { r.FileName, r.SequenceNumber, r.Content, r.Distance }), JsonOpts);
             }
         }
         catch (Exception ex)
@@ -52,6 +90,22 @@ public class KnowledgeHubBotHandler(
             // （同 ChatSseStreamer 的錯誤處理原則，見該類別註解）。
             logger.LogError(ex, "Bot RAG 問答處理失敗");
             reply = "抱歉，處理您的問題時發生錯誤，請稍後再試。";
+            conversation = null; // LLM 沒有算出正確答案，不落庫（避免存進錯誤訊息或半套紀錄）
+        }
+
+        if (conversation is not null)
+        {
+            // 落庫與 LLM 呼叫分開處理：已經算出的正確回答不能被落庫失敗蓋掉——
+            // 落庫失敗只記 log，使用者仍拿到答案，事後由後端可觀測性追查孤兒訊息。
+            try
+            {
+                await conversations.AppendMessageAsync(conversation.Id, "user", text, ct: cancellationToken);
+                await conversations.AppendMessageAsync(conversation.Id, "assistant", rawAnswer, sourcesJson, ct: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Bot 對話落庫失敗");
+            }
         }
 
         await turnContext.SendActivityAsync(MessageFactory.Text(reply), cancellationToken);

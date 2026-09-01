@@ -1,0 +1,35 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "2629b8d6-a548-4c0c-9eb0-a1971cc16494",
+  "developer": {
+    "name": "QBurger IT",
+    "websiteUrl": "https://github.com/LuXiaoMie1/KnowledgeHub",
+    "privacyUrl": "https://github.com/LuXiaoMie1/KnowledgeHub",
+    "termsOfUseUrl": "https://github.com/LuXiaoMie1/KnowledgeHub"
+  },
+  "name": {
+    "short": "KnowledgeHub",
+    "full": "KnowledgeHub 內部知識庫問答"
+  },
+  "description": {
+    "short": "公司內部文件 RAG 問答機器人",
+    "full": "以公司內部文件為知識庫的問答機器人（開發版）。目前回答範圍為全公司共用文件。"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#4F46E5",
+  "bots": [
+    {
+      "botId": "2629b8d6-a548-4c0c-9eb0-a1971cc16494",
+      "scopes": ["personal"],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

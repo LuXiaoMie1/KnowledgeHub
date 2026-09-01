@@ -1,1 +1,7 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand: #1a1a1a; /* 2026-09-01 使用者定案：黑色 */
+  --color-brand-hover: #333333;
+}
