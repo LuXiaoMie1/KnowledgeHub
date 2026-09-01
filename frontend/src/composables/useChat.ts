@@ -11,6 +11,9 @@ let controller: AbortController | null = null
 // 模組層單例：目前開啟的對話（null＝新對話尚未建立）
 const messages = ref<ChatMessage[]>([])
 const conversationId = ref<string | null>(null)
+// sending 也必須是模組層單例：ChatView 靠 watch(sending) 在發話結束後刷新側欄，
+// 若留在 useChat() 函式層，ChatView 與 ChatPanel 各持一份，watcher 永不觸發。
+const sending = ref(false)
 
 // 每次 open()/reset() 遞增的世代號：連續切換對話時，晚啟動、晚回來的 fetch 若已不是最新一次
 // 呼叫（generation 對不上），代表使用者已經切到別的對話，結果直接丟棄，不寫入 state。
@@ -18,7 +21,6 @@ let generation = 0
 
 export function useChat() {
   const { authHeader, checkNoDepartment } = useAuth()
-  const sending = ref(false)
 
   /**
    * 載入既有對話（側欄點選／網址帶 id 進入）。
