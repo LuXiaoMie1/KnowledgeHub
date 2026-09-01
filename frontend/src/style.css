@@ -2,6 +2,6 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-brand: #e4002b; /* 暫定值：套用前自 QBurger 官網取正式色票，經使用者確認後替換 */
-  --color-brand-hover: #c50025;
+  --color-brand: #1a1a1a; /* 2026-09-01 使用者定案：黑色 */
+  --color-brand-hover: #333333;
 }
