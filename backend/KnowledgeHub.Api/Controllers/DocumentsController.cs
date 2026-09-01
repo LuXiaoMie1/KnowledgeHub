@@ -13,7 +13,7 @@ public class DocumentsController(
     IDocumentRepository docs, IDocumentJobQueue queue,
     ICurrentUser user, UploadOptions upload) : ControllerBase
 {
-    private static readonly string[] AllowedExtensions = [".pdf", ".md"];
+    private static readonly string[] AllowedExtensions = [".pdf", ".md", ".docx"];
     private const long MaxBytes = 20 * 1024 * 1024;
     // 20–25MB 由本 controller 判斷回規格要求的 400；超過 25MB 由框架的 RequestSizeLimit
     // 擋成 413，屬防護性上限（避免 MaxBytes 附近誤差讓真實請求被框架搶先擋成 413 而非 400）。
@@ -31,7 +31,7 @@ public class DocumentsController(
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(ext))
-            return BadRequest(new { error = "只接受 .pdf 或 .md 檔案" });
+            return BadRequest(new { error = "只接受 .pdf、.md 或 .docx 檔案" });
         if (file.Length > MaxBytes)
             return BadRequest(new { error = "檔案不可超過 20MB" });
 

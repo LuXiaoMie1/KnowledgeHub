@@ -114,6 +114,7 @@ builder.Services.AddScoped<IDocumentJobQueue, HangfireDocumentJobQueue>();
 builder.Services.AddScoped<DocumentProcessingJob>();
 builder.Services.AddScoped<IDocumentTextExtractor, PdfTextExtractor>();
 builder.Services.AddScoped<IDocumentTextExtractor, MarkdownTextExtractor>();
+builder.Services.AddScoped<IDocumentTextExtractor, DocxTextExtractor>();
 builder.Services.AddScoped<RetrievalContext>();
 // AI provider：Vertex AI（服務帳戶 OAuth），不再用 AI Studio 的 API key。
 var vertexProjectId = builder.Configuration["Vertex:ProjectId"]

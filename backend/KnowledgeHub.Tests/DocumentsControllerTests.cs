@@ -69,15 +69,30 @@ public class DocumentsControllerTests
     }
 
     [Theory]
-    [InlineData("report.docx")]
+    [InlineData("old.doc")]
+    [InlineData("sheet.xlsx")]
     [InlineData("script.exe")]
-    public async Task 非PDF或MD回400(string fileName)
+    public async Task 不支援的副檔名回400(string fileName)
     {
         var (ctrl, docs, queue) = NewController(Path.GetTempPath());
         var result = await ctrl.Upload(File(fileName, 100), null, null);
         Assert.IsType<BadRequestObjectResult>(result);
         Assert.Empty(docs.Added);
         Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task docx上傳成功並排入處理()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var (ctrl, docs, queue) = NewController(root);
+        var result = await ctrl.Upload(File("form.docx", 100), null, null);
+        Assert.IsType<AcceptedResult>(result);
+        var doc = Assert.Single(docs.Added);
+        Assert.Equal("form.docx", doc.FileName);
+        Assert.Single(queue.Enqueued);
+        Assert.True(System.IO.File.Exists(Path.Combine(root, $"{doc.Id}.docx")));
+        Directory.Delete(root, recursive: true);
     }
 
     [Fact]

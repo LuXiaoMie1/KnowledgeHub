@@ -3,7 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useDocuments } from '../composables/useDocuments'
 import { useAuth } from '../composables/useAuth'
 
-const ALLOWED_EXTENSIONS = ['.pdf', '.md']
+const ALLOWED_EXTENSIONS = ['.pdf', '.md', '.docx']
 const MAX_BYTES = 20 * 1024 * 1024
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,7 +47,7 @@ onMounted(async () => {
 
 function validate(file: File): string | null {
   const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
-  if (!ALLOWED_EXTENSIONS.includes(ext)) return '只接受 .pdf 或 .md 檔案'
+  if (!ALLOWED_EXTENSIONS.includes(ext)) return '只接受 .pdf、.md 或 .docx 檔案'
   if (file.size > MAX_BYTES) return '檔案不可超過 20MB'
   return null
 }
@@ -125,7 +125,7 @@ async function onDrop(e: DragEvent) {
   if (entries.length > 0) {
     const files = (await Promise.all(entries.map(collectEntry))).flat()
     if (files.length === 0) {
-      message.value = '拖進來的內容沒有 .pdf / .md 檔案'
+      message.value = '拖進來的內容沒有 .pdf / .md / .docx 檔案'
       return
     }
     handleFiles(files)
@@ -174,14 +174,14 @@ async function onDelete(id: string) {
       <div class="mt-2 flex gap-2">
         <label class="cursor-pointer rounded bg-slate-900 px-3 py-1 text-white" :class="{ 'opacity-50': uploading }">
           {{ uploading ? '上傳中…' : '選擇檔案' }}
-          <input type="file" accept=".pdf,.md" multiple class="hidden" :disabled="uploading" @change="onFileChange" />
+          <input type="file" accept=".pdf,.md,.docx" multiple class="hidden" :disabled="uploading" @change="onFileChange" />
         </label>
         <label class="cursor-pointer rounded border border-slate-400 px-3 py-1 text-slate-700" :class="{ 'opacity-50': uploading }">
           選擇資料夾
           <input type="file" webkitdirectory class="hidden" :disabled="uploading" @change="onFileChange" />
         </label>
       </div>
-      <p class="mt-1 text-xs text-slate-400">僅接受 .pdf / .md，20MB 以內</p>
+      <p class="mt-1 text-xs text-slate-400">僅接受 .pdf / .md / .docx，20MB 以內</p>
     </div>
 
     <ul class="flex-1 space-y-2 overflow-y-auto">
