@@ -12,7 +12,8 @@ const rtf = new Intl.RelativeTimeFormat('zh-TW', { numeric: 'auto' })
 
 /** 側欄相對時間（spec §6）：7 天內用「幾分鐘/小時/天前」，超過 7 天顯示日期。 */
 function formatRelative(updatedAtUtc: string): string {
-  const date = new Date(updatedAtUtc)
+  // 後端的 datetime2 經 EF 讀出為 Kind=Unspecified，JSON 不帶 Z——不補上會被當本地時間解析（差 8 小時）。
+  const date = new Date(/[Z+]|[-]\d{2}:\d{2}$/.test(updatedAtUtc) ? updatedAtUtc : updatedAtUtc + 'Z')
   const diffMs = date.getTime() - Date.now()
   const diffDay = diffMs / 86_400_000
   if (Math.abs(diffDay) >= 7) return date.toLocaleDateString('zh-TW')
